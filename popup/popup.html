@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KOL 采集助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 标题栏 -->
+    <header class="header">
+      <h1>📋 KOL 采集助手</h1>
+      <div class="stats">
+        <span class="stat-badge">👤 <span id="blogger-count">0</span> 博主</span>
+        <span class="stat-badge">📝 <span id="post-count">0</span> 帖子</span>
+      </div>
+    </header>
+
+    <!-- Tab 切换 -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="bloggers">博主库</button>
+      <button class="tab" data-tab="posts">帖子收藏</button>
+    </nav>
+
+    <!-- 博主列表 -->
+    <div class="panel active" id="panel-bloggers">
+      <div class="list" id="blogger-list">
+        <div class="empty-state">暂无采集数据<br>去小红书/抖音博主主页点击 📋 按钮采集</div>
+      </div>
+    </div>
+
+    <!-- 帖子列表 -->
+    <div class="panel" id="panel-posts">
+      <div class="list" id="post-list">
+        <div class="empty-state">暂无采集数据<br>去小红书/抖音帖子页点击 📋 按钮采集</div>
+      </div>
+    </div>
+
+    <!-- 操作栏 -->
+    <footer class="actions">
+      <button class="btn btn-primary" id="btn-export-xlsx">导出 Excel</button>
+      <button class="btn btn-secondary" id="btn-export-json">导出 JSON</button>
+      <button class="btn btn-danger" id="btn-clear">清空数据</button>
+    </footer>
+  </div>
+
+  <!-- 备注编辑弹窗 -->
+  <div class="modal-overlay" id="note-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span>编辑备注</span>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <textarea id="note-input" placeholder="输入备注..." rows="3"></textarea>
+      <button class="btn btn-primary modal-save" id="modal-save">保存</button>
+    </div>
+  </div>
+
+  <script src="../lib/xlsx.full.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

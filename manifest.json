@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "KOL 采集助手",
+  "description": "一键采集小红书/抖音/B站/微博博主和帖子数据，支持 Excel/JSON 导出",
+  "version": "1.1.0",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.xiaohongshu.com/*"],
+      "js": ["content/xhs-bridge.js"],
+      "run_at": "document_end",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.xiaohongshu.com/*"],
+      "js": ["content/xhs.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.douyin.com/*"],
+      "js": ["content/douyin.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.bilibili.com/*"],
+      "js": ["content/bilibili.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.weibo.com/*", "*://*.weibo.cn/*"],
+      "js": ["content/weibo.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,320 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 380px;
+  min-height: 480px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  color: #2d3436;
+  background: #f8f9fa;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 标题栏 */
+.header {
+  background: linear-gradient(135deg, #ff4757, #ff6b81);
+  color: #fff;
+  padding: 14px 16px;
+}
+
+.header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.stats {
+  display: flex;
+  gap: 10px;
+}
+
+.stat-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+/* Tab 切换 */
+.tabs {
+  display: flex;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #636e72;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.tab.active {
+  color: #ff4757;
+  border-bottom-color: #ff4757;
+}
+
+.tab:hover:not(.active) {
+  background: #f8f9fa;
+}
+
+/* 面板 */
+.panel {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 320px;
+}
+
+.panel.active {
+  display: block;
+}
+
+.list {
+  padding: 8px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #b2bec3;
+  padding: 40px 20px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 条目卡片 */
+.item-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s;
+}
+
+.item-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.item-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.item-platform {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.platform-xhs {
+  background: #ff2442;
+}
+
+.platform-douyin {
+  background: #fe2c55;
+}
+
+.platform-bilibili {
+  background: #00a1d6;
+}
+
+.platform-weibo {
+  background: #e6162d;
+}
+
+.item-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #636e72;
+  margin-bottom: 4px;
+}
+
+.item-note {
+  font-size: 11px;
+  color: #b2bec3;
+  font-style: italic;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed #eee;
+}
+
+.item-note.has-content {
+  color: #636e72;
+  font-style: normal;
+}
+
+.item-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.item-actions button {
+  padding: 3px 8px;
+  border: 1px solid #dfe6e9;
+  border-radius: 4px;
+  background: #fff;
+  color: #636e72;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.item-actions button:hover {
+  background: #f8f9fa;
+  border-color: #b2bec3;
+}
+
+.item-actions .btn-delete:hover {
+  background: #fff5f5;
+  border-color: #ff4757;
+  color: #ff4757;
+}
+
+/* 底部操作栏 */
+.actions {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #fff;
+  border-top: 1px solid #eee;
+}
+
+.btn {
+  flex: 1;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #ff4757;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #e8414f;
+}
+
+.btn-secondary {
+  background: #dfe6e9;
+  color: #2d3436;
+}
+
+.btn-secondary:hover {
+  background: #c8d6e5;
+}
+
+.btn-danger {
+  background: #fff;
+  color: #ff4757;
+  border: 1px solid #ff4757;
+}
+
+.btn-danger:hover {
+  background: #fff5f5;
+}
+
+/* 弹窗 */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  width: 300px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.modal-close {
+  border: none;
+  background: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #636e72;
+}
+
+.modal textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #dfe6e9;
+  border-radius: 6px;
+  font-size: 13px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.modal textarea:focus {
+  outline: none;
+  border-color: #ff4757;
+}
+
+.modal-save {
+  margin-top: 10px;
+  width: 100%;
+}
+
+/* 链接 */
+a {
+  color: #ff4757;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
