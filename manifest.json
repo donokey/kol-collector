@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "KOL 采集助手",
   "description": "一键采集小红书/抖音/B站/微博博主和帖子数据，支持 Excel/JSON 导出",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "permissions": ["storage", "activeTab", "scripting"],
   "content_scripts": [
     {
@@ -13,22 +13,22 @@
     },
     {
       "matches": ["*://*.xiaohongshu.com/*"],
-      "js": ["content/xhs.js"],
+      "js": ["lib/shared-ui.js", "content/xhs.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://*.douyin.com/*"],
-      "js": ["content/douyin.js"],
+      "js": ["lib/shared-ui.js", "content/douyin.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://*.bilibili.com/*"],
-      "js": ["content/bilibili.js"],
+      "js": ["lib/shared-ui.js", "content/bilibili.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://*.weibo.com/*", "*://*.weibo.cn/*"],
-      "js": ["content/weibo.js"],
+      "js": ["lib/shared-ui.js", "content/weibo.js"],
       "run_at": "document_idle"
     }
   ],
