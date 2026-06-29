@@ -1,6 +1,15 @@
 // KOL 采集助手 - Background Service Worker
 // 负责数据存储管理（chrome.storage.local）
 
+// 写入队列：串行化存储操作，防止批量保存时并发写入导致数据丢失
+let storageQueue = Promise.resolve();
+
+function queueWrite(fn) {
+  const p = storageQueue.then(fn, fn);
+  storageQueue = p.then(() => {}, () => {});
+  return p;
+}
+
 // 初始化存储
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get(['bloggers', 'posts'], (result) => {
@@ -65,45 +74,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ========== 存储操作 ==========
 
 async function saveBlogger(data) {
-  try {
-    const result = await chrome.storage.local.get('bloggers');
-    const bloggers = result.bloggers || [];
+  return queueWrite(async () => {
+    try {
+      const result = await chrome.storage.local.get('bloggers');
+      const bloggers = result.bloggers || [];
 
-    // 去重：以 id 为 key，已存在则更新
-    const existingIndex = bloggers.findIndex(b => b.id === data.id);
-    if (existingIndex >= 0) {
-      // 保留原有备注，更新其他字段
-      bloggers[existingIndex] = { ...data, note: bloggers[existingIndex].note };
-    } else {
-      bloggers.push(data);
+      // 去重：以 id 为 key，已存在则更新
+      const existingIndex = bloggers.findIndex(b => b.id === data.id);
+      if (existingIndex >= 0) {
+        // 保留原有备注，更新其他字段
+        bloggers[existingIndex] = { ...data, note: bloggers[existingIndex].note };
+      } else {
+        bloggers.push(data);
+      }
+
+      await chrome.storage.local.set({ bloggers });
+      return { success: true };
+    } catch (e) {
+      console.error('[KOL采集] saveBlogger error:', e);
+      return { success: false, error: e.message };
     }
-
-    await chrome.storage.local.set({ bloggers });
-    return { success: true };
-  } catch (e) {
-    console.error('[KOL采集] saveBlogger error:', e);
-    return { success: false, error: e.message };
-  }
+  });
 }
 
 async function savePost(data) {
-  try {
-    const result = await chrome.storage.local.get('posts');
-    const posts = result.posts || [];
+  return queueWrite(async () => {
+    try {
+      const result = await chrome.storage.local.get('posts');
+      const posts = result.posts || [];
 
-    const existingIndex = posts.findIndex(p => p.id === data.id);
-    if (existingIndex >= 0) {
-      posts[existingIndex] = { ...data, note: posts[existingIndex].note };
-    } else {
-      posts.push(data);
+      const existingIndex = posts.findIndex(p => p.id === data.id);
+      if (existingIndex >= 0) {
+        posts[existingIndex] = { ...data, note: posts[existingIndex].note };
+      } else {
+        posts.push(data);
+      }
+
+      await chrome.storage.local.set({ posts });
+      return { success: true };
+    } catch (e) {
+      console.error('[KOL采集] savePost error:', e);
+      return { success: false, error: e.message };
     }
-
-    await chrome.storage.local.set({ posts });
-    return { success: true };
-  } catch (e) {
-    console.error('[KOL采集] savePost error:', e);
-    return { success: false, error: e.message };
-  }
+  });
 }
 
 async function getAllData() {
