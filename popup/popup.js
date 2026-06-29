@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderPosts() {
     if (allData.posts.length === 0) {
-      postListEl.innerHTML = '<div class="empty-state">暂无采集数据<br>去小红书/B站/微博帖子页点击 📋 按钮采集</div>';
+      postListEl.innerHTML = '<div class="empty-state">暂无采集数据<br>去小红书/抖音/B站/微博帖子页点击 📋 按钮采集</div>';
       return;
     }
 
@@ -148,7 +148,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="item-meta">
           <span>博主: ${escapeHtml(p.bloggerName)}</span>
           <span>点赞: ${formatNumber(p.likes)}</span>
-          <span>评论: ${formatNumber(p.comments)}</span>
+        </div>
+        <div class="item-meta">
+          <span>评论: ${formatNumber(p.comments || 0)}</span>
+          <span>收藏: ${formatNumber(p.favorites || 0)}</span>
+          <span>转发: ${formatNumber(p.shares || 0)}</span>
         </div>
         <div class="item-meta">
           ${followersDisplay}
@@ -339,12 +343,14 @@ document.addEventListener('DOMContentLoaded', () => {
         '博主粉丝数': p.bloggerFollowers,
         '点赞数': p.likes,
         '评论数': p.comments || 0,
+        '收藏数': p.favorites || 0,
+        '转发数': p.shares || 0,
         '备注': p.note,
         '采集时间': new Date(p.collectedAt).toLocaleString('zh-CN')
       }));
       const ws2 = XLSX.utils.json_to_sheet(postRows);
       ws2['!cols'] = [
-        { wch: 8 }, { wch: 30 }, { wch: 40 }, { wch: 16 }, { wch: 40 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 20 }, { wch: 18 }
+        { wch: 8 }, { wch: 30 }, { wch: 40 }, { wch: 16 }, { wch: 40 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 20 }, { wch: 18 }
       ];
       XLSX.utils.book_append_sheet(wb, ws2, '帖子收藏');
     }

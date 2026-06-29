@@ -228,6 +228,8 @@
                     bloggerFollowers: post.bloggerFollowers,
                     likes: post.likes,
                     comments: post.comments,
+                    favorites: post.favorites || 0,
+                    shares: post.shares || 0,
                     note: post.note || '',
                     collectedAt: post.collectedAt
                   };
@@ -268,6 +270,8 @@
       bloggerFollowers: user.followers_count || 0,
       likes: mblog.attitudes_count || 0,
       comments: mblog.comments_count || 0,
+      favorites: 0,
+      shares: mblog.reposts_count || 0,
       note: '',
       collectedAt: new Date().toISOString(),
       // 选择器展示用
@@ -307,6 +311,8 @@
               bloggerFollowers: user.followers_count || 0,
               likes: post.attitudes_count || 0,
               comments: post.comments_count || 0,
+              favorites: 0,
+              shares: post.reposts_count || 0,
               note: '',
               collectedAt: new Date().toISOString()
             }},
@@ -345,7 +351,9 @@
           id: data.id, platform: CFG.name,
           title: data.title.substring(0, 100), postUrl: data.postUrl,
           bloggerName: data.bloggerName, bloggerProfileUrl: '',
-          bloggerFollowers: data.followers, likes: data.likes,
+          bloggerFollowers: data.followers,
+          likes: data.likes || 0, comments: data.comments || 0,
+          favorites: data.favorites || 0, shares: data.shares || 0,
           note: '', collectedAt: new Date().toISOString()
         }},
         function (r) {

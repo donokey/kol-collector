@@ -179,7 +179,7 @@
     });
   }
 
-  function savePostData(noteId, title, bloggerName, bloggerProfileUrl, likes, comments) {
+  function savePostData(noteId, title, bloggerName, bloggerProfileUrl, likes, comments, favorites, shares) {
     chrome.runtime.sendMessage(
       { action: 'savePost', data: {
         id: CFG.idPrefix + '_' + noteId,
@@ -191,6 +191,8 @@
         bloggerFollowers: 0,
         likes: likes || 0,
         comments: comments || 0,
+        favorites: favorites || 0,
+        shares: shares || 0,
         note: '',
         collectedAt: new Date().toISOString()
       }},
@@ -220,7 +222,7 @@
         var interact = noteData.interactInfo || {};
         var user = noteData.user || {};
         console.log('[KOL采集] 第1层命中(initialState), likes:', interact.likedCount, 'comments:', interact.commentCount);
-        savePostData(noteId, noteData.title || noteData.desc, user.nickname, user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '', parseCount(interact.likedCount), parseCount(interact.commentCount));
+        savePostData(noteId, noteData.title || noteData.desc, user.nickname, user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '', parseCount(interact.likedCount), parseCount(interact.commentCount), parseCount(interact.collectedCount), parseCount(interact.shareCount));
         return;
       }
     }
@@ -236,7 +238,7 @@
           var apiInteract = apiNote.interactInfo || {};
           var apiUser = apiNote.user || {};
           console.log('[KOL采集] 第2层命中(API拦截), likes:', apiInteract.likedCount, 'comments:', apiInteract.commentCount, 'interactInfo:', JSON.stringify(apiInteract));
-          savePostData(noteId, apiNote.title || apiNote.desc, apiUser.nickname, apiUser.userId ? 'https://www.xiaohongshu.com/user/profile/' + apiUser.userId : '', parseCount(apiInteract.likedCount), parseCount(apiInteract.commentCount));
+          savePostData(noteId, apiNote.title || apiNote.desc, apiUser.nickname, apiUser.userId ? 'https://www.xiaohongshu.com/user/profile/' + apiUser.userId : '', parseCount(apiInteract.likedCount), parseCount(apiInteract.commentCount), parseCount(apiInteract.collectedCount), parseCount(apiInteract.shareCount));
           return;
         } else {
           console.log('[KOL采集] 第2层: noteDetailMap 中未找到 noteId, 可用的 keys:', apiData.noteDetailMap ? Object.keys(apiData.noteDetailMap) : 'null');
@@ -250,7 +252,7 @@
     var domData = collectFromDom(noteId);
     if (domData) {
       console.log('[KOL采集] 第3层命中(DOM), likes:', domData.likes, 'comments:', domData.comments, 'title:', domData.title);
-      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes, domData.comments);
+      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes, domData.comments, 0, 0);
       return;
     }
 
@@ -266,7 +268,9 @@
             id: data.id, platform: CFG.name,
             title: data.title.substring(0, 100), postUrl: data.postUrl,
             bloggerName: data.bloggerName, bloggerProfileUrl: '',
-            bloggerFollowers: data.followers, likes: data.likes,
+            bloggerFollowers: data.followers,
+            likes: data.likes || 0, comments: data.comments || 0,
+            favorites: data.favorites || 0, shares: data.shares || 0,
             note: '', collectedAt: new Date().toISOString()
           }},
           function (r) {

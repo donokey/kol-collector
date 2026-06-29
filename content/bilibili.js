@@ -184,6 +184,8 @@
               bloggerFollowers: fans,
               likes: stat.like || 0,
               comments: stat.reply || 0,
+              favorites: stat.favorite || 0,
+              shares: stat.share || 0,
               note: '',
               collectedAt: new Date().toISOString()
             }},
@@ -229,7 +231,9 @@
           id: data.id, platform: CFG.name,
           title: data.title.substring(0, 100), postUrl: data.postUrl,
           bloggerName: data.bloggerName, bloggerProfileUrl: '',
-          bloggerFollowers: data.followers, likes: data.likes,
+          bloggerFollowers: data.followers,
+          likes: data.likes || 0, comments: data.comments || 0,
+          favorites: data.favorites || 0, shares: data.shares || 0,
           note: '', collectedAt: new Date().toISOString()
         }},
         function (r) {
