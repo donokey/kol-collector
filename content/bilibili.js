@@ -37,6 +37,19 @@
   }
 
   function fetchJson(url) {
+    // B站 API 需要 CSRF token，从 bili_jct cookie 中提取
+    var csrf = '';
+    var cookies = document.cookie.split(';');
+    for (var i = 0; i < cookies.length; i++) {
+      var c = cookies[i].trim();
+      if (c.indexOf('bili_jct=') === 0) {
+        csrf = c.substring(9);
+        break;
+      }
+    }
+    if (csrf) {
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'csrf=' + encodeURIComponent(csrf);
+    }
     return fetch(url, { credentials: 'include' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
@@ -170,6 +183,7 @@
               bloggerProfileUrl: owner.mid ? 'https://space.bilibili.com/' + owner.mid : '',
               bloggerFollowers: fans,
               likes: stat.like || 0,
+              comments: stat.reply || 0,
               note: '',
               collectedAt: new Date().toISOString()
             }},
@@ -183,8 +197,16 @@
 
         if (owner.mid) {
           fetchJson('https://api.bilibili.com/x/relation/stat?vmid=' + owner.mid)
-            .then(function (u) { saveVideo(u.code === 0 && u.data ? (u.data.follower || 0) : 0); })
-            .catch(function () { saveVideo(0); });
+            .then(function (u) {
+              if (u.code !== 0) {
+                console.log('[KOL采集] B站粉丝API失败, code:', u.code, 'message:', u.message);
+              }
+              saveVideo(u.code === 0 && u.data ? (u.data.follower || 0) : 0);
+            })
+            .catch(function (e) {
+              console.log('[KOL采集] B站粉丝API异常:', e);
+              saveVideo(0);
+            });
         } else {
           saveVideo(0);
         }
