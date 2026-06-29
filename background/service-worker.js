@@ -48,6 +48,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       importData(message.bloggers, message.posts).then(sendResponse);
       return true;
 
+    case 'fetchUrl':
+      fetchUrl(message.url).then(sendResponse);
+      return true;
+
     default:
       sendResponse({ success: false, error: 'unknown action: ' + message.action });
       return false;
@@ -214,6 +218,20 @@ async function importData(newBloggers, newPosts) {
     return { success: true, importedBloggers, importedPosts, skippedBloggers, skippedPosts };
   } catch (e) {
     console.error('[KOL采集] importData error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ========== 跨域代理 ==========
+
+async function fetchUrl(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    return { success: true, data };
+  } catch (e) {
+    console.error('[KOL采集] fetchUrl error:', e);
     return { success: false, error: e.message };
   }
 }
