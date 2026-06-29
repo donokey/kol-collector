@@ -48,10 +48,19 @@
       for (var i = 0; i < scripts.length; i++) {
         var text = scripts[i].textContent || '';
         if (text.indexOf('__INITIAL_STATE__') !== -1) {
-          var m = text.match(/__INITIAL_STATE__\s*=\s*(\{[\s\S]+\})/);
-          if (m && m[1]) {
-            var str = m[1].replace(/:undefined/g, ':null');
-            return JSON.parse(str);
+          // 平衡括号提取，避免贪婪正则吞掉后续 JS 变量
+          var start = text.indexOf('{', text.indexOf('__INITIAL_STATE__'));
+          if (start !== -1) {
+            var depth = 0, inStr = false, esc = false;
+            for (var k = start; k < text.length; k++) {
+              var ch = text[k];
+              if (esc) { esc = false; continue; }
+              if (ch === '\\') { esc = true; continue; }
+              if (ch === '"' || ch === "'") { inStr = !inStr; continue; }
+              if (inStr) continue;
+              if (ch === '{') depth++;
+              else if (ch === '}') { depth--; if (depth === 0) { var str = text.substring(start, k + 1).replace(/:undefined/g, ':null'); return JSON.parse(str); } }
+            }
           }
         }
       }

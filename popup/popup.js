@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveFollowers() {
     if (!editingFollowersId) return;
     const raw = followersInput.value.trim();
-    if (!raw) { followersInput.style.borderColor = '#e74c3c'; return; }
+    if (!raw) { followersInput.style.borderColor = '#FF3B30'; return; }
 
     // 支持 "1.2万" 格式
     let followers;
@@ -255,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
       followers = parseInt(raw.replace(/,/g, ''), 10);
     }
     if (isNaN(followers) || followers < 0) {
-      followersInput.style.borderColor = '#e74c3c';
+      followersInput.style.borderColor = '#FF3B30';
       return;
     }
 
