@@ -67,37 +67,53 @@
   function collectFromDom(noteId) {
     var title = '', bloggerName = '', likes = 0, comments = 0;
 
-    // 标题：优先 ID 选择器，再 class，最后 meta
+    // 标题：多重回退
     var titleEl = document.getElementById('detail-title');
-    if (!titleEl) {
-      titleEl = document.querySelector('.title');
-    }
     if (titleEl) title = (titleEl.textContent || '').trim();
     if (!title) {
-      var descEl = document.querySelector('.desc');
+      var descEl = document.querySelector('.note-text, .desc');
       if (descEl) title = (descEl.textContent || '').trim().substring(0, 100);
     }
     if (!title) {
       var ogTitle = document.querySelector('meta[property="og:title"]');
       if (ogTitle) title = (ogTitle.getAttribute('content') || '').trim();
     }
+    // 尝试从页面 <title> 提取（通常格式为 "标题 - 作者的小红书"）
+    if (!title && document.title) {
+      var titleMatch = document.title.match(/^(.+?)[\s-]/);
+      if (titleMatch) title = titleMatch[1].trim();
+    }
 
     // 博主名
     var authorEl = document.querySelector('.username')
       || document.querySelector('[class*="author"] .name')
-      || document.querySelector('[class*="nickname"]');
+      || document.querySelector('[class*="nickname"]')
+      || document.querySelector('.user-name');
     if (authorEl) bloggerName = (authorEl.textContent || '').trim();
 
-    // 互动数据：XHS 互动栏通常按 点赞、收藏、评论、分享 排列
-    var countEls = document.querySelectorAll('.engage-bar-style .count, .interactions .count, .engage-bar .count');
+    // 互动数据：尝试多种已知的 XHS 互动栏选择器
+    var selectors = [
+      '.engage-bar-style .count',
+      '.interactions .count',
+      '.engage-bar .count',
+      '.interaction-container .count',
+      '.note-action .count',
+      '.side-bar .count',
+      '.engage-bar-container .count'
+    ];
+    var countEls = null;
+    for (var i = 0; i < selectors.length; i++) {
+      var els = document.querySelectorAll(selectors[i]);
+      if (els.length >= 2) { countEls = els; break; }
+    }
+    // 回退：如果上述选择器都不匹配，取页面中所有 .count 元素
+    if (!countEls) {
+      countEls = document.querySelectorAll('.count');
+    }
     if (countEls.length >= 1) likes = parseCount((countEls[0].textContent || '').trim());
     if (countEls.length >= 3) comments = parseCount((countEls[2].textContent || '').trim());
-    // 回退：如果互动栏选择器不匹配，尝试通用 .count
-    if (countEls.length === 0) {
-      var fallbackEls = document.querySelectorAll('.count');
-      if (fallbackEls.length >= 1) likes = parseCount((fallbackEls[0].textContent || '').trim());
-      if (fallbackEls.length >= 3) comments = parseCount((fallbackEls[2].textContent || '').trim());
-    }
+
+    console.log('[KOL采集-DOM] countEls.length:', countEls.length, 'raw values:', Array.from(countEls).map(function(el) { return el.textContent.trim(); }));
 
     if (title || bloggerName) {
       return {
@@ -195,12 +211,15 @@
       return;
     }
 
+    console.log('[KOL采集] noteId:', noteId, 'spaNavigated:', spaNavigated);
+
     // 第1层：从 __INITIAL_STATE__ 获取（仅页面刚加载时有效，SPA 导航后数据是旧的）
     if (!spaNavigated && state) {
       var noteData = state.note && state.note.noteDetailMap && state.note.noteDetailMap[noteId] && state.note.noteDetailMap[noteId].note;
       if (noteData) {
         var interact = noteData.interactInfo || {};
         var user = noteData.user || {};
+        console.log('[KOL采集] 第1层命中(initialState), likes:', interact.likedCount, 'comments:', interact.commentCount);
         savePostData(noteId, noteData.title || noteData.desc, user.nickname, user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '', parseCount(interact.likedCount), parseCount(interact.commentCount));
         return;
       }
@@ -209,25 +228,33 @@
     // 第2层：从 API 拦截数据获取（SPA 导航后有效）
     try {
       var apiEl = document.getElementById('__kol_xhs_api_data__');
+      console.log('[KOL采集] 第2层检查: apiEl ready =', apiEl && apiEl.dataset.ready);
       if (apiEl && apiEl.textContent && apiEl.dataset.ready === '1') {
         var apiData = JSON.parse(apiEl.textContent);
         var apiNote = apiData.noteDetailMap && apiData.noteDetailMap[noteId] && apiData.noteDetailMap[noteId].note;
         if (apiNote) {
           var apiInteract = apiNote.interactInfo || {};
           var apiUser = apiNote.user || {};
+          console.log('[KOL采集] 第2层命中(API拦截), likes:', apiInteract.likedCount, 'comments:', apiInteract.commentCount, 'interactInfo:', JSON.stringify(apiInteract));
           savePostData(noteId, apiNote.title || apiNote.desc, apiUser.nickname, apiUser.userId ? 'https://www.xiaohongshu.com/user/profile/' + apiUser.userId : '', parseCount(apiInteract.likedCount), parseCount(apiInteract.commentCount));
           return;
+        } else {
+          console.log('[KOL采集] 第2层: noteDetailMap 中未找到 noteId, 可用的 keys:', apiData.noteDetailMap ? Object.keys(apiData.noteDetailMap) : 'null');
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.log('[KOL采集] 第2层异常:', e);
+    }
 
     // 第3层：从 DOM 元素刮取（最后手段）
     var domData = collectFromDom(noteId);
     if (domData) {
+      console.log('[KOL采集] 第3层命中(DOM), likes:', domData.likes, 'comments:', domData.comments, 'title:', domData.title);
       savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes, domData.comments);
       return;
     }
 
+    console.log('[KOL采集] 全部未命中，回退到手动表单');
     // 第4层：回退到手动填写表单
     KolUi.showPostForm({
       color: CFG.color, label: '帖子', subLabel: CFG.name,

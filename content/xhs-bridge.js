@@ -129,21 +129,30 @@
 
   function captureApiData(data) {
     if (data && data.data && data.data.noteDetailMap) {
+      // 只保留包含当前帖子 ID 的数据，避免 feed API 响应覆盖 detail API 的新鲜数据
+      var pathNoteId = (location.pathname.match(/\/explore\/([^/?]+)/) ||
+                        location.pathname.match(/\/discovery\/item\/([^/?]+)/));
+      var currentId = pathNoteId ? pathNoteId[1] : null;
+      if (currentId && !data.data.noteDetailMap[currentId]) {
+        return; // 这个响应不包含当前帖子的数据，跳过
+      }
+      console.log('[KOL采集-bridge] API数据已捕获, noteIds:', Object.keys(data.data.noteDetailMap));
       apiEl.textContent = JSON.stringify(data.data);
       apiEl.dataset.ready = '1';
     }
   }
 
-  // 拦截 fetch
+  // 拦截 fetch（不过滤 content-type，捕获所有可能的 JSON 响应）
   var _fetch = window.fetch;
   window.fetch = function () {
     return _fetch.apply(this, arguments).then(function (response) {
-      var ct = response.headers.get('content-type') || '';
-      if (ct.indexOf('json') >= 0) {
+      try {
         response.clone().text().then(function (text) {
-          try { captureApiData(JSON.parse(text)); } catch (e) {}
+          if (text.charAt(0) === '{') {
+            try { captureApiData(JSON.parse(text)); } catch (e) {}
+          }
         });
-      }
+      } catch (e) {}
       return response;
     });
   };
@@ -152,10 +161,9 @@
   var _xhrOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url) {
     this.addEventListener('load', function () {
-      if (this.status === 200 && this.responseText) {
+      if (this.status === 200 && this.responseText && this.responseText.charAt(0) === '{') {
         try {
-          var data = JSON.parse(this.responseText);
-          captureApiData(data);
+          captureApiData(JSON.parse(this.responseText));
         } catch (e) {}
       }
     });
