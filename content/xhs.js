@@ -8,6 +8,16 @@
 
   var CFG = { name: '小红书', color: '#ff4757', idPrefix: 'xhs' };
 
+  // SPA 导航检测：初始页面的 URL 如果变了，说明是 SPA 跳转，
+  // 此时 __INITIAL_STATE__ 里的帖子数据是旧的（首页预览值），不可信
+  var initialPathname = window.location.pathname;
+  var spaNavigated = false;
+  setInterval(function () {
+    if (!spaNavigated && window.location.pathname !== initialPathname) {
+      spaNavigated = true;
+    }
+  }, 500);
+
   // ========== 数据桥接 ==========
 
   function getInitialState() {
@@ -185,8 +195,8 @@
       return;
     }
 
-    // 第1层：从 __INITIAL_STATE__ 获取（页面刚加载时有效）
-    if (state) {
+    // 第1层：从 __INITIAL_STATE__ 获取（仅页面刚加载时有效，SPA 导航后数据是旧的）
+    if (!spaNavigated && state) {
       var noteData = state.note && state.note.noteDetailMap && state.note.noteDetailMap[noteId] && state.note.noteDetailMap[noteId].note;
       if (noteData) {
         var interact = noteData.interactInfo || {};
