@@ -41,8 +41,10 @@
     <footer class="actions">
       <button class="btn btn-primary" id="btn-export-xlsx">导出 Excel</button>
       <button class="btn btn-secondary" id="btn-export-json">导出 JSON</button>
+      <button class="btn btn-secondary" id="btn-import-json">导入 JSON</button>
       <button class="btn btn-danger" id="btn-clear">清空数据</button>
     </footer>
+    <input type="file" id="import-file-input" accept=".json" style="display:none">
   </div>
 
   <!-- 备注编辑弹窗 -->
@@ -54,6 +56,19 @@
       </div>
       <textarea id="note-input" placeholder="输入备注..." rows="3"></textarea>
       <button class="btn btn-primary modal-save" id="modal-save">保存</button>
+    </div>
+  </div>
+
+  <!-- 粉丝数编辑弹窗 -->
+  <div class="modal-overlay" id="followers-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span>补填博主粉丝数</span>
+        <button class="modal-close" id="followers-modal-close">&times;</button>
+      </div>
+      <div style="margin-bottom:8px;font-size:12px;color:#636e72" id="followers-modal-hint"></div>
+      <input id="followers-input" type="text" placeholder="输入粉丝数，如 12000 或 1.2万" style="width:100%;padding:8px 12px;border:1px solid #dfe6e9;border-radius:6px;font-size:13px;box-sizing:border-box">
+      <button class="btn btn-primary modal-save" id="followers-modal-save">保存</button>
     </div>
   </div>
 

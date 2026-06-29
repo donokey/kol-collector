@@ -12,9 +12,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const postListEl = document.getElementById('post-list');
   const noteModal = document.getElementById('note-modal');
   const noteInput = document.getElementById('note-input');
+  const followersModal = document.getElementById('followers-modal');
+  const followersInput = document.getElementById('followers-input');
+  const followersHint = document.getElementById('followers-modal-hint');
+  let editingFollowersId = null;
 
   // ========== 初始化 ==========
   loadData();
+
+  // 实时监听存储变化（其他标签页采集数据时自动刷新面板）
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace !== 'local') return;
+    if (changes.bloggers) {
+      allData.bloggers = changes.bloggers.newValue || [];
+    }
+    if (changes.posts) {
+      allData.posts = changes.posts.newValue || [];
+    }
+    if (changes.bloggers || changes.posts) {
+      render();
+    }
+  });
 
   // Tab 切换
   document.querySelectorAll('.tab').forEach(tab => {
@@ -24,16 +42,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 导出按钮
+  // 导出/导入按钮
   document.getElementById('btn-export-xlsx').addEventListener('click', exportXlsx);
   document.getElementById('btn-export-json').addEventListener('click', exportJson);
+  document.getElementById('btn-import-json').addEventListener('click', triggerImport);
   document.getElementById('btn-clear').addEventListener('click', clearAll);
+
+  // 隐藏的文件选择器
+  const importFileInput = document.getElementById('import-file-input');
+  importFileInput.addEventListener('change', handleImportFile);
 
   // 备注弹窗
   document.getElementById('modal-close').addEventListener('click', closeNoteModal);
   document.getElementById('modal-save').addEventListener('click', saveNote);
   noteModal.addEventListener('click', (e) => {
     if (e.target === noteModal) closeNoteModal();
+  });
+
+  // 粉丝数弹窗
+  document.getElementById('followers-modal-close').addEventListener('click', closeFollowersModal);
+  document.getElementById('followers-modal-save').addEventListener('click', saveFollowers);
+  followersModal.addEventListener('click', (e) => {
+    if (e.target === followersModal) closeFollowersModal();
   });
 
   // ========== 数据加载 ==========
@@ -104,7 +134,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    postListEl.innerHTML = allData.posts.map(p => `
+    postListEl.innerHTML = allData.posts.map(p => {
+      const followersDisplay = p.bloggerFollowers
+        ? `粉丝: ${formatNumber(p.bloggerFollowers)}`
+        : `<span class="followers-unknown" data-action="edit-followers" data-id="${escapeHtml(p.id)}" data-name="${escapeHtml(p.bloggerName)}" title="点击补填">粉丝数未知</span>`;
+
+      return `
       <div class="item-card" data-id="${escapeHtml(p.id)}" data-type="post">
         <div class="item-header">
           <span class="item-name">${escapeHtml(p.title.substring(0, 30))}${p.title.length > 30 ? '...' : ''}</span>
@@ -115,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span>点赞: ${formatNumber(p.likes)}</span>
         </div>
         <div class="item-meta">
+          ${followersDisplay}
           <span>${formatTime(p.collectedAt)}</span>
         </div>
         ${p.note ? `<div class="item-note has-content">${escapeHtml(p.note)}</div>` : ''}
@@ -124,11 +160,19 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="btn-delete" data-action="delete" data-id="${escapeHtml(p.id)}" data-type="post">删除</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   // ========== 事件委托：处理列表中的按钮点击 ==========
   function handleListClick(e) {
+    // 处理粉丝数未知标记点击
+    const followersEl = e.target.closest('[data-action="edit-followers"]');
+    if (followersEl) {
+      openFollowersModal(followersEl.dataset.id, followersEl.dataset.name);
+      return;
+    }
+
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
 
@@ -179,6 +223,50 @@ document.addEventListener('DOMContentLoaded', () => {
           if (item) item.note = note;
           render();
           closeNoteModal();
+        }
+      }
+    );
+  }
+
+  // ========== 粉丝数编辑 ==========
+  function openFollowersModal(postId, bloggerName) {
+    editingFollowersId = postId;
+    followersHint.textContent = '博主: ' + (bloggerName || '未知');
+    followersInput.value = '';
+    followersModal.classList.add('active');
+    setTimeout(() => followersInput.focus(), 100);
+  }
+
+  function closeFollowersModal() {
+    followersModal.classList.remove('active');
+    editingFollowersId = null;
+  }
+
+  function saveFollowers() {
+    if (!editingFollowersId) return;
+    const raw = followersInput.value.trim();
+    if (!raw) { followersInput.style.borderColor = '#e74c3c'; return; }
+
+    // 支持 "1.2万" 格式
+    let followers;
+    if (raw.includes('万')) {
+      followers = Math.round(parseFloat(raw) * 10000);
+    } else {
+      followers = parseInt(raw.replace(/,/g, ''), 10);
+    }
+    if (isNaN(followers) || followers < 0) {
+      followersInput.style.borderColor = '#e74c3c';
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { action: 'updateFollowers', id: editingFollowersId, followers },
+      (response) => {
+        if (response?.success) {
+          const item = allData.posts.find(p => p.id === editingFollowersId);
+          if (item) item.bloggerFollowers = followers;
+          render();
+          closeFollowersModal();
         }
       }
     );
@@ -262,6 +350,72 @@ document.addEventListener('DOMContentLoaded', () => {
     // 下载
     const filename = `KOL采集_${new Date().toISOString().slice(0, 10)}.xlsx`;
     XLSX.writeFile(wb, filename);
+  }
+
+  // ========== 导入 JSON ==========
+  function triggerImport() {
+    importFileInput.value = ''; // 清空以触发 change 事件（即使选同一个文件）
+    importFileInput.click();
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      try {
+        const imported = JSON.parse(evt.target.result);
+        // 校验结构
+        if (!imported || typeof imported !== 'object') {
+          throw new Error('JSON 格式不正确：需要一个包含 bloggers 和 posts 的对象');
+        }
+        const bloggers = Array.isArray(imported.bloggers) ? imported.bloggers : [];
+        const posts = Array.isArray(imported.posts) ? imported.posts : [];
+
+        if (bloggers.length === 0 && posts.length === 0) {
+          alert('文件中没有可导入的数据（bloggers 和 posts 均为空）');
+          return;
+        }
+
+        // 校验每条记录的必要字段
+        const validBloggers = bloggers.filter(function (b) {
+          return b && typeof b.id === 'string' && b.id && typeof b.platform === 'string';
+        });
+        const validPosts = posts.filter(function (p) {
+          return p && typeof p.id === 'string' && p.id && typeof p.platform === 'string';
+        });
+
+        const skippedB = bloggers.length - validBloggers.length;
+        const skippedP = posts.length - validPosts.length;
+        let confirmMsg = '即将导入：\n  ' + validBloggers.length + ' 条博主\n  ' + validPosts.length + ' 条帖子';
+        if (skippedB > 0 || skippedP > 0) {
+          confirmMsg += '\n\n跳过无效记录：' + (skippedB + skippedP) + ' 条（缺少 id/platform）';
+        }
+        confirmMsg += '\n\n重复 ID 的记录将更新已有数据。确定导入？';
+
+        if (!confirm(confirmMsg)) return;
+
+        chrome.runtime.sendMessage(
+          { action: 'importData', bloggers: validBloggers, posts: validPosts },
+          function (response) {
+            if (response && response.success) {
+              var msg = '导入完成：' + response.importedBloggers + ' 条博主，' + response.importedPosts + ' 条帖子';
+              if (response.skippedBloggers > 0 || response.skippedPosts > 0) {
+                msg += '（跳过重复：' + (response.skippedBloggers + response.skippedPosts) + ' 条）';
+              }
+              // 实时更新已通过 onChanged 触发，这里仅提示
+              alert(msg);
+            } else {
+              alert('导入失败：' + ((response && response.error) || '未知错误'));
+            }
+          }
+        );
+      } catch (err) {
+        alert('文件解析失败：' + err.message + '\n请确认选择的是本扩展导出的 JSON 文件。');
+      }
+    };
+    reader.readAsText(file);
   }
 
   // ========== 导出 JSON ==========

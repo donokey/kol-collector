@@ -174,6 +174,19 @@ body {
   font-style: normal;
 }
 
+/* 粉丝数未知标记 */
+.followers-unknown {
+  color: #e17055;
+  cursor: pointer;
+  border-bottom: 1px dashed #e17055;
+  transition: color 0.2s;
+}
+
+.followers-unknown:hover {
+  color: #d63031;
+  border-bottom-color: #d63031;
+}
+
 .item-actions {
   display: flex;
   gap: 6px;
