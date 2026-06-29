@@ -71,13 +71,37 @@
     return num.toLocaleString();
   }
 
+  function parseWeiboDate(dateStr) {
+    if (!dateStr) return null;
+    var now = new Date();
+    var m;
+    if (m = dateStr.match(/^(\d+)\s*分钟前$/)) {
+      return new Date(now.getTime() - parseInt(m[1]) * 60000);
+    }
+    if (m = dateStr.match(/^(\d+)\s*小时前$/)) {
+      return new Date(now.getTime() - parseInt(m[1]) * 3600000);
+    }
+    if (dateStr.indexOf('今天') === 0) {
+      var t = dateStr.match(/(\d+):(\d+)/);
+      if (t) { var d = new Date(); d.setHours(parseInt(t[1]), parseInt(t[2]), 0, 0); return d; }
+    }
+    if (m = dateStr.match(/^昨天\s*(\d+):(\d+)/)) {
+      var d = new Date(); d.setDate(d.getDate() - 1);
+      d.setHours(parseInt(m[1]), parseInt(m[2]), 0, 0); return d;
+    }
+    if (m = dateStr.match(/^(\d{1,2})-(\d{1,2})$/)) {
+      return new Date(now.getFullYear(), parseInt(m[1]) - 1, parseInt(m[2]));
+    }
+    // "Mon Jan 15 14:30:00 +0800 2024" or ISO format
+    var d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
-    try {
-      var d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
-    } catch (e) { return dateStr; }
+    var d = parseWeiboDate(dateStr);
+    if (!d) return dateStr;
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
   }
 
   // ========== 数据采集 ==========
@@ -178,74 +202,109 @@
         // 回退：默认 containerid = "107603" + uid
         if (!containerid) containerid = '107603' + uid;
 
-        // 第二步：获取微博列表
-        return fetchJson('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + uid + '&containerid=' + containerid)
-          .then(function (postsData) {
+        // 分页获取博文（最多5页）
+        var allPosts = [];
+        var MAX_PAGES = 5;
+
+        function fetchPage(page) {
+          var url = 'https://m.weibo.cn/api/container/getIndex?type=uid&value=' + uid +
+                    '&containerid=' + containerid + '&page=' + page;
+          return fetchJson(url).then(function (postsData) {
             if (postsData.ok !== 1 || !postsData.data || !postsData.data.cards) {
-              throw new Error('获取博文列表失败');
+              return false; // 没有更多数据
             }
 
-            // 提取帖子数据
-            var posts = [];
             var cards = postsData.data.cards;
+            var pageInfo = postsData.data.cardlistInfo || {};
+            var newCount = 0;
+
             for (var i = 0; i < cards.length; i++) {
               var card = cards[i];
-              // 普通微博卡片
               if (card.mblog) {
-                posts.push(parseMblog(card.mblog, userInfo));
+                allPosts.push(parseMblog(card.mblog, userInfo));
+                newCount++;
               }
-              // card_group 内嵌的微博（如置顶+普通混合）
               if (card.card_group) {
                 for (var j = 0; j < card.card_group.length; j++) {
                   if (card.card_group[j].mblog) {
-                    posts.push(parseMblog(card.card_group[j].mblog, userInfo));
+                    allPosts.push(parseMblog(card.card_group[j].mblog, userInfo));
+                    newCount++;
                   }
                 }
               }
             }
 
-            if (posts.length === 0) {
-              KolUi.showToast('该博主暂无公开博文', true, CFG.color);
-              return;
-            }
+            KolUi.showToast('已获取 ' + allPosts.length + ' 条博文（第' + page + '页）...', false, CFG.color);
 
-            // 显示选择器
-            KolUi.showPostSelector({
-              title: '\u5FAE\u535A\u6587 (' + posts.length + ' \u6761)',
-              posts: posts,
-              onSave: function (selected) {
-                var saved = 0;
-                var total = selected.length;
-                selected.forEach(function (post) {
-                  // 清除展示字段，只保留存储字段
-                  var saveData = {
-                    id: post.id,
-                    platform: post.platform,
-                    title: post.title,
-                    postUrl: post.postUrl,
-                    bloggerName: post.bloggerName,
-                    bloggerProfileUrl: post.bloggerProfileUrl,
-                    bloggerFollowers: post.bloggerFollowers,
-                    likes: post.likes,
-                    comments: post.comments,
-                    favorites: post.favorites || 0,
-                    shares: post.shares || 0,
-                    note: post.note || '',
-                    collectedAt: post.collectedAt
-                  };
-                  chrome.runtime.sendMessage(
-                    { action: 'savePost', data: saveData },
-                    function (r) {
-                      saved++;
-                      if (saved === total) {
-                        KolUi.showToast('\u5DF2\u91C7\u96C6 ' + total + ' \u6761\u535A\u6587', false, CFG.color);
-                      }
-                    }
-                  );
-                });
-              }
-            });
+            // 判断是否还有下一页
+            var total = pageInfo.total || 0;
+            if (newCount === 0 || page >= MAX_PAGES) return false;
+            if (total > 0 && allPosts.length >= total) return false;
+            return true; // 继续下一页
           });
+        }
+
+        function fetchNext(page) {
+          return fetchPage(page).then(function (hasMore) {
+            if (hasMore) {
+              // 间隔300ms避免请求过快
+              return new Promise(function (resolve) { setTimeout(resolve, 300); })
+                .then(function () { return fetchNext(page + 1); });
+            }
+            return allPosts;
+          });
+        }
+
+        return fetchNext(1).then(function (posts) {
+          if (posts.length === 0) {
+            KolUi.showToast('该博主暂无公开博文', true, CFG.color);
+            return;
+          }
+
+          // 按时间从新到旧排序
+          posts.sort(function (a, b) {
+            var da = a.rawDate ? a.rawDate.getTime() : 0;
+            var db = b.rawDate ? b.rawDate.getTime() : 0;
+            return db - da;
+          });
+
+          // 显示选择器（支持搜索和时间筛选）
+          KolUi.showPostSelector({
+            title: '\u5FAE\u535A\u6587 (' + posts.length + ' \u6761)',
+            posts: posts,
+            showFilters: true,
+            onSave: function (selected) {
+              var saved = 0;
+              var total = selected.length;
+              selected.forEach(function (post) {
+                var saveData = {
+                  id: post.id,
+                  platform: post.platform,
+                  title: post.title,
+                  postUrl: post.postUrl,
+                  bloggerName: post.bloggerName,
+                  bloggerProfileUrl: post.bloggerProfileUrl,
+                  bloggerFollowers: post.bloggerFollowers,
+                  likes: post.likes,
+                  comments: post.comments,
+                  favorites: post.favorites || 0,
+                  shares: post.shares || 0,
+                  note: post.note || '',
+                  collectedAt: post.collectedAt
+                };
+                chrome.runtime.sendMessage(
+                  { action: 'savePost', data: saveData },
+                  function (r) {
+                    saved++;
+                    if (saved === total) {
+                      KolUi.showToast('\u5DF2\u91C7\u96C6 ' + total + ' \u6761\u535A\u6587', false, CFG.color);
+                    }
+                  }
+                );
+              });
+            }
+          });
+        });
       })
       .catch(function (e) {
         KolUi.showToast(e.message || '获取博文列表失败', true, CFG.color);
@@ -258,6 +317,7 @@
     var postId = mblog.id || mblog.mid || '';
     var rawText = mblog.text_raw || stripHtml(mblog.text || '').trim();
     var text = rawText.replace(/\s+/g, ' ').trim();
+    var rawDate = parseWeiboDate(mblog.created_at) || new Date();
 
     return {
       // 保存用的完整数据
@@ -278,7 +338,8 @@
       titleText: (text || '无内容').substring(0, 60),
       likesText: formatCount(mblog.attitudes_count || 0),
       commentsText: formatCount(mblog.comments_count || 0),
-      dateText: formatDate(mblog.created_at)
+      dateText: formatDate(mblog.created_at),
+      rawDate: rawDate
     };
   }
 
