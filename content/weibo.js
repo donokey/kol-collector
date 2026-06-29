@@ -144,6 +144,7 @@
               bloggerProfileUrl: user.id ? 'https://weibo.com/u/' + user.id : '',
               bloggerFollowers: user.followers_count || 0,
               likes: post.attitudes_count || 0,
+              comments: post.comments_count || 0,
               note: '',
               collectedAt: new Date().toISOString()
             }},

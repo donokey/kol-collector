@@ -55,7 +55,7 @@
   // ========== DOM 回退采集 ==========
 
   function collectFromDom(noteId) {
-    var title = '', bloggerName = '', likes = 0;
+    var title = '', bloggerName = '', likes = 0, comments = 0;
 
     // 标题：优先 ID 选择器，再 class，最后 meta
     var titleEl = document.getElementById('detail-title');
@@ -78,17 +78,23 @@
       || document.querySelector('[class*="nickname"]');
     if (authorEl) bloggerName = (authorEl.textContent || '').trim();
 
-    // 点赞数：取第一个 .count 元素（通常是 like 对应的计数）
-    var countEls = document.querySelectorAll('.count');
-    if (countEls.length > 0) {
-      likes = parseCount((countEls[0].textContent || '').trim());
+    // 互动数据：XHS 互动栏通常按 点赞、收藏、评论、分享 排列
+    var countEls = document.querySelectorAll('.engage-bar-style .count, .interactions .count, .engage-bar .count');
+    if (countEls.length >= 1) likes = parseCount((countEls[0].textContent || '').trim());
+    if (countEls.length >= 3) comments = parseCount((countEls[2].textContent || '').trim());
+    // 回退：如果互动栏选择器不匹配，尝试通用 .count
+    if (countEls.length === 0) {
+      var fallbackEls = document.querySelectorAll('.count');
+      if (fallbackEls.length >= 1) likes = parseCount((fallbackEls[0].textContent || '').trim());
+      if (fallbackEls.length >= 3) comments = parseCount((fallbackEls[2].textContent || '').trim());
     }
 
     if (title || bloggerName) {
       return {
         title: title || '无标题',
         bloggerName: bloggerName || '未知',
-        likes: likes
+        likes: likes,
+        comments: comments
       };
     }
     return null;
@@ -147,7 +153,7 @@
     });
   }
 
-  function savePostData(noteId, title, bloggerName, bloggerProfileUrl, likes) {
+  function savePostData(noteId, title, bloggerName, bloggerProfileUrl, likes, comments) {
     chrome.runtime.sendMessage(
       { action: 'savePost', data: {
         id: CFG.idPrefix + '_' + noteId,
@@ -158,6 +164,7 @@
         bloggerProfileUrl: bloggerProfileUrl || '',
         bloggerFollowers: 0,
         likes: likes || 0,
+        comments: comments || 0,
         note: '',
         collectedAt: new Date().toISOString()
       }},
@@ -184,7 +191,7 @@
       if (noteData) {
         var interact = noteData.interactInfo || {};
         var user = noteData.user || {};
-        savePostData(noteId, noteData.title || noteData.desc, user.nickname, user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '', parseCount(interact.likedCount));
+        savePostData(noteId, noteData.title || noteData.desc, user.nickname, user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '', parseCount(interact.likedCount), parseCount(interact.commentCount));
         return;
       }
     }
@@ -198,7 +205,7 @@
         if (apiNote) {
           var apiInteract = apiNote.interactInfo || {};
           var apiUser = apiNote.user || {};
-          savePostData(noteId, apiNote.title || apiNote.desc, apiUser.nickname, apiUser.userId ? 'https://www.xiaohongshu.com/user/profile/' + apiUser.userId : '', parseCount(apiInteract.likedCount));
+          savePostData(noteId, apiNote.title || apiNote.desc, apiUser.nickname, apiUser.userId ? 'https://www.xiaohongshu.com/user/profile/' + apiUser.userId : '', parseCount(apiInteract.likedCount), parseCount(apiInteract.commentCount));
           return;
         }
       }
@@ -207,7 +214,7 @@
     // 第3层：从 DOM 元素刮取（最后手段）
     var domData = collectFromDom(noteId);
     if (domData) {
-      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes);
+      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes, domData.comments);
       return;
     }
 
