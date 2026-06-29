@@ -305,59 +305,188 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ========== 导出 Excel ==========
-  function exportXlsx() {
+  // ========== 导出 Excel (ExcelJS) ==========
+  async function exportXlsx() {
     if (allData.bloggers.length === 0 && allData.posts.length === 0) {
       alert('没有数据可导出');
       return;
     }
 
-    const wb = XLSX.utils.book_new();
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'KOL采集助手';
+    wb.created = new Date();
 
-    // Sheet 1: 博主库
+    // 通用样式
+    const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+    const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: '微软雅黑' };
+    const bodyFont = { size: 10, name: '微软雅黑' };
+    const linkFont = { size: 10, name: '微软雅黑', color: { argb: 'FF0563C1' }, underline: true };
+    const thinBorder = {
+      top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+      left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+      bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+      right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+    };
+    const centerAlign = { horizontal: 'center', vertical: 'middle' };
+    const leftAlign = { horizontal: 'left', vertical: 'middle', wrapText: true };
+    const evenRowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F6FC' } };
+
+    function styleSheet(ws, colCount) {
+      // 表头样式
+      const headerRow = ws.getRow(1);
+      for (let c = 1; c <= colCount; c++) {
+        const cell = headerRow.getCell(c);
+        cell.fill = headerFill;
+        cell.font = headerFont;
+        cell.alignment = centerAlign;
+        cell.border = thinBorder;
+      }
+      headerRow.height = 28;
+
+      // 数据行样式
+      for (let r = 2; r <= ws.rowCount; r++) {
+        const row = ws.getRow(r);
+        const isEven = r % 2 === 0;
+        for (let c = 1; c <= colCount; c++) {
+          const cell = row.getCell(c);
+          cell.font = bodyFont;
+          cell.border = thinBorder;
+          cell.alignment = leftAlign;
+          if (isEven) cell.fill = evenRowFill;
+        }
+        row.height = 22;
+      }
+
+      // 链接列加蓝链样式
+      ws.eachRow(function (row, rowNumber) {
+        if (rowNumber <= 1) return;
+        row.eachCell(function (cell) {
+          if (cell.hyperlink) {
+            cell.font = linkFont;
+          }
+        });
+      });
+
+      // 冻结首行 + 自动筛选
+      ws.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+      if (ws.rowCount > 1) {
+        ws.autoFilter = {
+          from: { row: 1, column: 1 },
+          to: { row: ws.rowCount, column: colCount }
+        };
+      }
+    }
+
+    // ========== Sheet 1: 博主库 ==========
     if (allData.bloggers.length > 0) {
-      const bloggerRows = allData.bloggers.map(b => ({
-        '平台': b.platform,
-        '博主名称': b.name,
-        '主页链接': b.profileUrl,
-        '粉丝数': b.followers,
-        '备注': b.note,
-        '采集时间': new Date(b.collectedAt).toLocaleString('zh-CN')
-      }));
-      const ws1 = XLSX.utils.json_to_sheet(bloggerRows);
-      // 设置列宽
-      ws1['!cols'] = [
-        { wch: 8 }, { wch: 16 }, { wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 18 }
+      const ws1 = wb.addWorksheet('博主库', {
+        properties: { tabColor: { argb: 'FF4472C4' } }
+      });
+      ws1.columns = [
+        { header: '平台', key: 'platform', width: 10 },
+        { header: '博主名称', key: 'name', width: 18 },
+        { header: '主页链接', key: 'profileUrl', width: 45 },
+        { header: '粉丝数', key: 'followers', width: 12 },
+        { header: '备注', key: 'note', width: 22 },
+        { header: '采集时间', key: 'collectedAt', width: 20 }
       ];
-      XLSX.utils.book_append_sheet(wb, ws1, '博主库');
+
+      allData.bloggers.forEach(b => {
+        const row = ws1.addRow({
+          platform: b.platform,
+          name: b.name,
+          followers: b.followers,
+          note: b.note || '',
+          collectedAt: new Date(b.collectedAt).toLocaleString('zh-CN')
+        });
+        // 主页链接设为可点击蓝链
+        const urlCell = row.getCell(3);
+        if (b.profileUrl) {
+          urlCell.value = { text: b.profileUrl, hyperlink: b.profileUrl };
+        }
+      });
+
+      styleSheet(ws1, 6);
+
+      // 粉丝数列居中 + 数字格式
+      for (let r = 2; r <= ws1.rowCount; r++) {
+        ws1.getRow(r).getCell(4).alignment = centerAlign;
+        ws1.getRow(r).getCell(4).numFmt = '#,##0';
+        ws1.getRow(r).getCell(1).alignment = centerAlign;
+      }
     }
 
-    // Sheet 2: 帖子收藏
+    // ========== Sheet 2: 帖子收藏 ==========
     if (allData.posts.length > 0) {
-      const postRows = allData.posts.map(p => ({
-        '平台': p.platform,
-        '帖子标题': p.title,
-        '帖子链接': p.postUrl,
-        '博主名称': p.bloggerName,
-        '博主主页链接': p.bloggerProfileUrl,
-        '博主粉丝数': p.bloggerFollowers,
-        '点赞数': p.likes,
-        '评论数': p.comments || 0,
-        '收藏数': p.favorites || 0,
-        '转发数': p.shares || 0,
-        '备注': p.note,
-        '采集时间': new Date(p.collectedAt).toLocaleString('zh-CN')
-      }));
-      const ws2 = XLSX.utils.json_to_sheet(postRows);
-      ws2['!cols'] = [
-        { wch: 8 }, { wch: 30 }, { wch: 40 }, { wch: 16 }, { wch: 40 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 20 }, { wch: 18 }
+      const ws2 = wb.addWorksheet('帖子收藏', {
+        properties: { tabColor: { argb: 'FFED7D31' } }
+      });
+      ws2.columns = [
+        { header: '平台', key: 'platform', width: 10 },
+        { header: '帖子标题', key: 'title', width: 35 },
+        { header: '帖子链接', key: 'postUrl', width: 45 },
+        { header: '博主名称', key: 'bloggerName', width: 16 },
+        { header: '博主主页', key: 'bloggerProfileUrl', width: 45 },
+        { header: '博主粉丝', key: 'bloggerFollowers', width: 12 },
+        { header: '点赞', key: 'likes', width: 10 },
+        { header: '评论', key: 'comments', width: 10 },
+        { header: '收藏', key: 'favorites', width: 10 },
+        { header: '转发', key: 'shares', width: 10 },
+        { header: '备注', key: 'note', width: 22 },
+        { header: '采集时间', key: 'collectedAt', width: 20 }
       ];
-      XLSX.utils.book_append_sheet(wb, ws2, '帖子收藏');
+
+      allData.posts.forEach(p => {
+        const row = ws2.addRow({
+          platform: p.platform,
+          title: p.title,
+          bloggerName: p.bloggerName,
+          bloggerFollowers: p.bloggerFollowers || 0,
+          likes: p.likes || 0,
+          comments: p.comments || 0,
+          favorites: p.favorites || 0,
+          shares: p.shares || 0,
+          note: p.note || '',
+          collectedAt: new Date(p.collectedAt).toLocaleString('zh-CN')
+        });
+        // 帖子链接设为可点击蓝链
+        const postUrlCell = row.getCell(3);
+        if (p.postUrl) {
+          postUrlCell.value = { text: p.postUrl, hyperlink: p.postUrl };
+        }
+        // 博主主页链接设为可点击蓝链
+        const bloggerUrlCell = row.getCell(5);
+        if (p.bloggerProfileUrl) {
+          bloggerUrlCell.value = { text: p.bloggerProfileUrl, hyperlink: p.bloggerProfileUrl };
+        }
+      });
+
+      styleSheet(ws2, 12);
+
+      // 数字列居中 + 千分位格式
+      const numCols = [6, 7, 8, 9, 10]; // 博主粉丝、点赞、评论、收藏、转发
+      for (let r = 2; r <= ws2.rowCount; r++) {
+        const row = ws2.getRow(r);
+        row.getCell(1).alignment = centerAlign; // 平台居中
+        numCols.forEach(c => {
+          row.getCell(c).alignment = centerAlign;
+          row.getCell(c).numFmt = '#,##0';
+        });
+      }
     }
 
-    // 下载
+    // 导出下载
     const filename = `KOL采集_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, filename);
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ========== 导入 JSON ==========
