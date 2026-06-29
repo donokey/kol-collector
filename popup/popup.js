@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const followersInput = document.getElementById('followers-input');
   const followersHint = document.getElementById('followers-modal-hint');
   let editingFollowersId = null;
+  let editingFollowersType = null; // 'blogger' or 'post'
 
   // ========== 初始化 ==========
   loadData();
@@ -108,14 +109,19 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    bloggerListEl.innerHTML = allData.bloggers.map(b => `
+    bloggerListEl.innerHTML = allData.bloggers.map(b => {
+      const followersDisplay = b.followers
+        ? `粉丝: ${formatNumber(b.followers)}`
+        : `<span class="followers-unknown" data-action="edit-blogger-followers" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" title="点击补填">粉丝数未知</span>`;
+
+      return `
       <div class="item-card" data-id="${escapeHtml(b.id)}" data-type="blogger">
         <div class="item-header">
           <span class="item-name">${escapeHtml(b.name)}</span>
           <span class="item-platform platform-${getPlatformClass(b.platform)}">${escapeHtml(b.platform)}</span>
         </div>
         <div class="item-meta">
-          <span>粉丝: ${formatNumber(b.followers)}</span>
+          ${followersDisplay}
           <span>${formatTime(b.collectedAt)}</span>
         </div>
         ${b.note ? `<div class="item-note has-content">${escapeHtml(b.note)}</div>` : ''}
@@ -125,7 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="btn-delete" data-action="delete" data-id="${escapeHtml(b.id)}" data-type="blogger">删除</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   function renderPosts() {
@@ -171,10 +178,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ========== 事件委托：处理列表中的按钮点击 ==========
   function handleListClick(e) {
-    // 处理粉丝数未知标记点击
+    // 处理博主粉丝数点击
+    const bloggerFollowersEl = e.target.closest('[data-action="edit-blogger-followers"]');
+    if (bloggerFollowersEl) {
+      openFollowersModal(bloggerFollowersEl.dataset.id, bloggerFollowersEl.dataset.name, 'blogger');
+      return;
+    }
+
+    // 处理帖子粉丝数点击
     const followersEl = e.target.closest('[data-action="edit-followers"]');
     if (followersEl) {
-      openFollowersModal(followersEl.dataset.id, followersEl.dataset.name);
+      openFollowersModal(followersEl.dataset.id, followersEl.dataset.name, 'post');
       return;
     }
 
@@ -234,9 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========== 粉丝数编辑 ==========
-  function openFollowersModal(postId, bloggerName) {
-    editingFollowersId = postId;
-    followersHint.textContent = '博主: ' + (bloggerName || '未知');
+  function openFollowersModal(itemId, name, type) {
+    editingFollowersId = itemId;
+    editingFollowersType = type || 'post';
+    followersHint.textContent = (editingFollowersType === 'blogger' ? '博主: ' : '博主: ') + (name || '未知');
     followersInput.value = '';
     followersModal.classList.add('active');
     setTimeout(() => followersInput.focus(), 100);
@@ -245,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeFollowersModal() {
     followersModal.classList.remove('active');
     editingFollowersId = null;
+    editingFollowersType = null;
   }
 
   function saveFollowers() {
@@ -264,12 +280,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const isBlogger = editingFollowersType === 'blogger';
+    const action = isBlogger ? 'updateBloggerFollowers' : 'updateFollowers';
+
     chrome.runtime.sendMessage(
-      { action: 'updateFollowers', id: editingFollowersId, followers },
+      { action, id: editingFollowersId, followers },
       (response) => {
         if (response?.success) {
-          const item = allData.posts.find(p => p.id === editingFollowersId);
-          if (item) item.bloggerFollowers = followers;
+          if (isBlogger) {
+            const item = allData.bloggers.find(b => b.id === editingFollowersId);
+            if (item) item.followers = followers;
+          } else {
+            const item = allData.posts.find(p => p.id === editingFollowersId);
+            if (item) item.bloggerFollowers = followers;
+          }
           render();
           closeFollowersModal();
         }
@@ -305,127 +329,117 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ========== Excel 通用样式 ==========
+  const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+  const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: '微软雅黑' };
+  const bodyFont = { size: 10, name: '微软雅黑' };
+  const linkFont = { size: 10, name: '微软雅黑', color: { argb: 'FF0563C1' }, underline: true };
+  const thinBorder = {
+    top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+  };
+  const centerAlign = { horizontal: 'center', vertical: 'middle' };
+  const leftAlign = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  const evenRowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F6FC' } };
+
+  function styleSheet(ws, colCount) {
+    const headerRow = ws.getRow(1);
+    for (let c = 1; c <= colCount; c++) {
+      const cell = headerRow.getCell(c);
+      cell.fill = headerFill;
+      cell.font = headerFont;
+      cell.alignment = centerAlign;
+      cell.border = thinBorder;
+    }
+    headerRow.height = 28;
+    for (let r = 2; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const isEven = r % 2 === 0;
+      for (let c = 1; c <= colCount; c++) {
+        const cell = row.getCell(c);
+        cell.font = bodyFont;
+        cell.border = thinBorder;
+        cell.alignment = leftAlign;
+        if (isEven) cell.fill = evenRowFill;
+      }
+      row.height = 22;
+    }
+    ws.eachRow(function (row, rowNumber) {
+      if (rowNumber <= 1) return;
+      row.eachCell(function (cell) {
+        if (cell.hyperlink) cell.font = linkFont;
+      });
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+    if (ws.rowCount > 1) {
+      ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: ws.rowCount, column: colCount } };
+    }
+  }
+
   // ========== 导出 Excel (ExcelJS) ==========
   async function exportXlsx() {
-    if (allData.bloggers.length === 0 && allData.posts.length === 0) {
-      alert('没有数据可导出');
-      return;
-    }
+    const date = new Date().toISOString().slice(0, 10);
 
-    const wb = new ExcelJS.Workbook();
-    wb.creator = 'KOL采集助手';
-    wb.created = new Date();
-
-    // 通用样式
-    const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
-    const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: '微软雅黑' };
-    const bodyFont = { size: 10, name: '微软雅黑' };
-    const linkFont = { size: 10, name: '微软雅黑', color: { argb: 'FF0563C1' }, underline: true };
-    const thinBorder = {
-      top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
-      left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
-      bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
-      right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
-    };
-    const centerAlign = { horizontal: 'center', vertical: 'middle' };
-    const leftAlign = { horizontal: 'left', vertical: 'middle', wrapText: true };
-    const evenRowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F6FC' } };
-
-    function styleSheet(ws, colCount) {
-      // 表头样式
-      const headerRow = ws.getRow(1);
-      for (let c = 1; c <= colCount; c++) {
-        const cell = headerRow.getCell(c);
-        cell.fill = headerFill;
-        cell.font = headerFont;
-        cell.alignment = centerAlign;
-        cell.border = thinBorder;
+    if (currentTab === 'bloggers') {
+      // 导出博主表
+      if (allData.bloggers.length === 0) {
+        alert('没有博主数据可导出');
+        return;
       }
-      headerRow.height = 28;
-
-      // 数据行样式
-      for (let r = 2; r <= ws.rowCount; r++) {
-        const row = ws.getRow(r);
-        const isEven = r % 2 === 0;
-        for (let c = 1; c <= colCount; c++) {
-          const cell = row.getCell(c);
-          cell.font = bodyFont;
-          cell.border = thinBorder;
-          cell.alignment = leftAlign;
-          if (isEven) cell.fill = evenRowFill;
-        }
-        row.height = 22;
-      }
-
-      // 链接列加蓝链样式
-      ws.eachRow(function (row, rowNumber) {
-        if (rowNumber <= 1) return;
-        row.eachCell(function (cell) {
-          if (cell.hyperlink) {
-            cell.font = linkFont;
-          }
-        });
-      });
-
-      // 冻结首行 + 自动筛选
-      ws.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
-      if (ws.rowCount > 1) {
-        ws.autoFilter = {
-          from: { row: 1, column: 1 },
-          to: { row: ws.rowCount, column: colCount }
-        };
-      }
-    }
-
-    // ========== Sheet 1: 博主库 ==========
-    if (allData.bloggers.length > 0) {
-      const ws1 = wb.addWorksheet('博主库', {
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'KOL采集助手';
+      wb.created = new Date();
+      const ws = wb.addWorksheet('博主库', {
         properties: { tabColor: { argb: 'FF4472C4' } }
       });
-      ws1.columns = [
+      ws.columns = [
         { header: '平台', key: 'platform', width: 10 },
         { header: '博主名称', key: 'name', width: 18 },
         { header: '主页链接', key: 'profileUrl', width: 45 },
         { header: '粉丝数', key: 'followers', width: 12 },
-        { header: '内容方向', key: 'category', width: 18 },
-        { header: '合作状态', key: 'status', width: 14 },
         { header: '备注', key: 'note', width: 22 },
         { header: '采集时间', key: 'collectedAt', width: 20 }
       ];
 
       allData.bloggers.forEach(b => {
-        const row = ws1.addRow({
+        const row = ws.addRow({
           platform: b.platform,
           name: b.name,
-          followers: b.followers,
-          category: '',
-          status: '',
+          followers: b.followers || 0,
           note: b.note || '',
           collectedAt: new Date(b.collectedAt).toLocaleString('zh-CN')
         });
-        // 主页链接设为可点击蓝链
         const urlCell = row.getCell(3);
         if (b.profileUrl) {
           urlCell.value = { text: b.profileUrl, hyperlink: b.profileUrl };
         }
       });
 
-      styleSheet(ws1, 8);
-
-      // 粉丝数列居中 + 数字格式
-      for (let r = 2; r <= ws1.rowCount; r++) {
-        ws1.getRow(r).getCell(4).alignment = centerAlign;
-        ws1.getRow(r).getCell(4).numFmt = '#,##0';
-        ws1.getRow(r).getCell(1).alignment = centerAlign;
+      styleSheet(ws, 6);
+      for (let r = 2; r <= ws.rowCount; r++) {
+        ws.getRow(r).getCell(4).alignment = centerAlign;
+        ws.getRow(r).getCell(4).numFmt = '#,##0';
+        ws.getRow(r).getCell(1).alignment = centerAlign;
       }
-    }
 
-    // ========== Sheet 2: 帖子收藏 ==========
-    if (allData.posts.length > 0) {
-      const ws2 = wb.addWorksheet('帖子收藏', {
+      const buffer = await wb.xlsx.writeBuffer();
+      downloadBlob(buffer, `KOL博主库_${date}.xlsx`);
+
+    } else {
+      // 导出帖子表
+      if (allData.posts.length === 0) {
+        alert('没有帖子数据可导出');
+        return;
+      }
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'KOL采集助手';
+      wb.created = new Date();
+      const ws = wb.addWorksheet('帖子收藏', {
         properties: { tabColor: { argb: 'FFED7D31' } }
       });
-      ws2.columns = [
+      ws.columns = [
         { header: '平台', key: 'platform', width: 10 },
         { header: '帖子标题', key: 'title', width: 35 },
         { header: '帖子链接', key: 'postUrl', width: 45 },
@@ -441,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       allData.posts.forEach(p => {
         const engagement = (p.likes || 0) + (p.comments || 0) + (p.favorites || 0);
-        const row = ws2.addRow({
+        const row = ws.addRow({
           platform: p.platform,
           title: p.title,
           bloggerName: p.bloggerName,
@@ -453,30 +467,29 @@ document.addEventListener('DOMContentLoaded', () => {
           note: p.note || '',
           collectedAt: new Date(p.collectedAt).toLocaleString('zh-CN')
         });
-        // 帖子链接设为可点击蓝链
         const postUrlCell = row.getCell(3);
         if (p.postUrl) {
           postUrlCell.value = { text: p.postUrl, hyperlink: p.postUrl };
         }
       });
 
-      styleSheet(ws2, 11);
-
-      // 数字列居中 + 千分位格式
-      const numCols = [5, 6, 7, 8, 9]; // 博主粉丝、点赞、评论、收藏、互动总量
-      for (let r = 2; r <= ws2.rowCount; r++) {
-        const row = ws2.getRow(r);
-        row.getCell(1).alignment = centerAlign; // 平台居中
+      styleSheet(ws, 11);
+      const numCols = [5, 6, 7, 8, 9];
+      for (let r = 2; r <= ws.rowCount; r++) {
+        const row = ws.getRow(r);
+        row.getCell(1).alignment = centerAlign;
         numCols.forEach(c => {
           row.getCell(c).alignment = centerAlign;
           row.getCell(c).numFmt = '#,##0';
         });
       }
-    }
 
-    // 导出下载
-    const filename = `KOL采集_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    const buffer = await wb.xlsx.writeBuffer();
+      const buffer = await wb.xlsx.writeBuffer();
+      downloadBlob(buffer, `KOL帖子收藏_${date}.xlsx`);
+    }
+  }
+
+  function downloadBlob(buffer, filename) {
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });

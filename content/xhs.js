@@ -62,10 +62,48 @@
     return 0;
   }
 
+  // 从 DOM 读取博主粉丝数（XHS 主页统计栏）
+  function readBloggersFollowersFromDOM() {
+    // 查找包含"粉丝"文字的标签，其相邻元素或父元素中有数量
+    var labels = document.querySelectorAll('span, div, p');
+    for (var i = 0; i < labels.length; i++) {
+      var text = (labels[i].textContent || '').trim();
+      if (text === '粉丝') {
+        // 检查下一个兄弟元素
+        var next = labels[i].nextElementSibling;
+        if (next) {
+          var count = parseCount((next.textContent || '').trim());
+          if (count > 0) return count;
+        }
+        // 检查父元素中的数字
+        var parent = labels[i].parentElement;
+        if (parent) {
+          var siblings = parent.children;
+          for (var j = 0; j < siblings.length; j++) {
+            if (siblings[j] !== labels[i]) {
+              var count = parseCount((siblings[j].textContent || '').trim());
+              if (count > 0) return count;
+            }
+          }
+        }
+      }
+    }
+    // 回退：查找 "X粉丝" 或 "粉丝X" 模式
+    for (var k = 0; k < labels.length; k++) {
+      var t = (labels[k].textContent || '').trim();
+      if (/^\d[\d,.]*万?\s*粉丝$/.test(t)) {
+        var numText = t.replace(/粉丝/g, '').trim();
+        var count = parseCount(numText);
+        if (count > 0) return count;
+      }
+    }
+    return 0;
+  }
+
   // ========== DOM 回退采集 ==========
 
   function collectFromDom(noteId) {
-    var title = '', bloggerName = '', likes = 0, comments = 0;
+    var title = '', bloggerName = '', likes = 0, comments = 0, favorites = 0;
 
     // 标题：多重回退
     var titleEl = document.getElementById('detail-title');
@@ -110,7 +148,9 @@
     if (!countEls) {
       countEls = document.querySelectorAll('.count');
     }
+    // XHS 互动栏顺序通常为：点赞[0]、收藏[1]、评论[2]、转发[3]
     if (countEls.length >= 1) likes = parseCount((countEls[0].textContent || '').trim());
+    if (countEls.length >= 2) favorites = parseCount((countEls[1].textContent || '').trim());
     if (countEls.length >= 3) comments = parseCount((countEls[2].textContent || '').trim());
 
     console.log('[KOL采集-DOM] countEls.length:', countEls.length, 'raw values:', Array.from(countEls).map(function(el) { return el.textContent.trim(); }));
@@ -120,7 +160,8 @@
         title: title || '无标题',
         bloggerName: bloggerName || '未知',
         likes: likes,
-        comments: comments
+        comments: comments,
+        favorites: favorites
       };
     }
     return null;
@@ -136,33 +177,47 @@
       return;
     }
 
+    var stateFollowers = 0;
+    var nickname = '未知';
     if (state) {
       var userData = state.user && state.user.userPageData;
       if (userData) {
         var info = userData.basicInfo || {};
-        chrome.runtime.sendMessage(
-          { action: 'saveBlogger', data: {
-            id: CFG.idPrefix + '_' + userId,
-            platform: CFG.name,
-            name: info.nickname || '未知',
-            profileUrl: 'https://www.xiaohongshu.com/user/profile/' + userId,
-            followers: parseCount(info.fans),
-            note: '',
-            collectedAt: new Date().toISOString()
-          }},
-          function (r) {
-            KolUi.showToast(r && r.success ? '已采集博主: ' + info.nickname : '保存失败', !r || !r.success, CFG.color);
-          }
-        );
-        return;
+        nickname = info.nickname || '未知';
+        stateFollowers = parseCount(info.fans);
       }
     }
 
-    // 桥接不可用，手动表单 — 用 URL 中的 userId 做 ID，避免重复
+    // 尝试从 DOM 补充粉丝数
+    var domFollowers = readBloggersFollowersFromDOM();
+    var followers = stateFollowers || domFollowers;
+
+    if (nickname !== '未知' && followers > 0) {
+      // 有名字有粉丝数，直接保存
+      chrome.runtime.sendMessage(
+        { action: 'saveBlogger', data: {
+          id: CFG.idPrefix + '_' + userId,
+          platform: CFG.name,
+          name: nickname,
+          profileUrl: 'https://www.xiaohongshu.com/user/profile/' + userId,
+          followers: followers,
+          note: '',
+          collectedAt: new Date().toISOString()
+        }},
+        function (r) {
+          KolUi.showToast(r && r.success ? '已采集博主: ' + nickname : '保存失败', !r || !r.success, CFG.color);
+        }
+      );
+      return;
+    }
+
+    // 数据不完整，弹手动表单，预填已知信息
     KolUi.showBloggerForm({
       color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
       autoId: CFG.idPrefix + '_' + userId,
       prefillUrl: 'https://www.xiaohongshu.com/user/profile/' + userId,
+      prefillName: nickname !== '未知' ? nickname : '',
+      prefillFollowers: followers > 0 ? followers : '',
       onSave: function (overlay, data) {
         chrome.runtime.sendMessage(
           { action: 'saveBlogger', data: {
@@ -251,8 +306,8 @@
     // 第3层：从 DOM 元素刮取（最后手段）
     var domData = collectFromDom(noteId);
     if (domData) {
-      console.log('[KOL采集] 第3层命中(DOM), likes:', domData.likes, 'comments:', domData.comments, 'title:', domData.title);
-      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes, domData.comments, 0, 0);
+      console.log('[KOL采集] 第3层命中(DOM), likes:', domData.likes, 'comments:', domData.comments, 'favorites:', domData.favorites, 'title:', domData.title);
+      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes, domData.comments, domData.favorites, 0);
       return;
     }
 

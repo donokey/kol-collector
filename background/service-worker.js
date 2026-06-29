@@ -36,6 +36,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       updateFollowers(message.id, message.followers).then(sendResponse);
       return true;
 
+    case 'updateBloggerFollowers':
+      updateBloggerFollowers(message.id, message.followers).then(sendResponse);
+      return true;
+
     case 'deleteItem':
       deleteItem(message.type, message.id).then(sendResponse);
       return true;
@@ -144,6 +148,22 @@ async function updateFollowers(id, followers) {
       return { success: true };
     }
     return { success: false, error: '未找到该帖子' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function updateBloggerFollowers(id, followers) {
+  try {
+    const result = await chrome.storage.local.get('bloggers');
+    const bloggers = result.bloggers || [];
+    const index = bloggers.findIndex(b => b.id === id);
+    if (index >= 0) {
+      bloggers[index].followers = followers;
+      await chrome.storage.local.set({ bloggers });
+      return { success: true };
+    }
+    return { success: false, error: '未找到该博主' };
   } catch (e) {
     return { success: false, error: e.message };
   }
