@@ -52,6 +52,48 @@
     return 0;
   }
 
+  // ========== DOM 回退采集 ==========
+
+  function collectFromDom(noteId) {
+    var title = '', bloggerName = '', likes = 0;
+
+    // 标题：优先 ID 选择器，再 class，最后 meta
+    var titleEl = document.getElementById('detail-title');
+    if (!titleEl) {
+      titleEl = document.querySelector('.title');
+    }
+    if (titleEl) title = (titleEl.textContent || '').trim();
+    if (!title) {
+      var descEl = document.querySelector('.desc');
+      if (descEl) title = (descEl.textContent || '').trim().substring(0, 100);
+    }
+    if (!title) {
+      var ogTitle = document.querySelector('meta[property="og:title"]');
+      if (ogTitle) title = (ogTitle.getAttribute('content') || '').trim();
+    }
+
+    // 博主名
+    var authorEl = document.querySelector('.username')
+      || document.querySelector('[class*="author"] .name')
+      || document.querySelector('[class*="nickname"]');
+    if (authorEl) bloggerName = (authorEl.textContent || '').trim();
+
+    // 点赞数：取第一个 .count 元素（通常是 like 对应的计数）
+    var countEls = document.querySelectorAll('.count');
+    if (countEls.length > 0) {
+      likes = parseCount((countEls[0].textContent || '').trim());
+    }
+
+    if (title || bloggerName) {
+      return {
+        title: title || '无标题',
+        bloggerName: bloggerName || '未知',
+        likes: likes
+      };
+    }
+    return null;
+  }
+
   // ========== 数据采集 ==========
 
   function collectBlogger() {
@@ -105,6 +147,29 @@
     });
   }
 
+  function savePostData(noteId, title, bloggerName, bloggerProfileUrl, likes) {
+    chrome.runtime.sendMessage(
+      { action: 'savePost', data: {
+        id: CFG.idPrefix + '_' + noteId,
+        platform: CFG.name,
+        title: (title || '').substring(0, 100) || '无标题',
+        postUrl: window.location.href.split('?')[0],
+        bloggerName: bloggerName || '未知',
+        bloggerProfileUrl: bloggerProfileUrl || '',
+        bloggerFollowers: 0,
+        likes: likes || 0,
+        note: '',
+        collectedAt: new Date().toISOString()
+      }},
+      function (r) {
+        KolUi.showToast(
+          r && r.success ? '已采集: ' + ((title || '').substring(0, 20)) + '...' : '保存失败',
+          !r || !r.success, CFG.color
+        );
+      }
+    );
+  }
+
   function collectPost() {
     var state = getInitialState();
     var noteId = extractIdFromUrl(window.location.href, 'post');
@@ -113,35 +178,40 @@
       return;
     }
 
+    // 第1层：从 __INITIAL_STATE__ 获取（页面刚加载时有效）
     if (state) {
       var noteData = state.note && state.note.noteDetailMap && state.note.noteDetailMap[noteId] && state.note.noteDetailMap[noteId].note;
       if (noteData) {
         var interact = noteData.interactInfo || {};
         var user = noteData.user || {};
-        chrome.runtime.sendMessage(
-          { action: 'savePost', data: {
-            id: CFG.idPrefix + '_' + noteId,
-            platform: CFG.name,
-            title: (noteData.title || noteData.desc || '').substring(0, 100) || '无标题',
-            postUrl: window.location.href.split('?')[0],
-            bloggerName: user.nickname || '未知',
-            bloggerProfileUrl: user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '',
-            bloggerFollowers: 0,
-            likes: parseCount(interact.likedCount),
-            note: '',
-            collectedAt: new Date().toISOString()
-          }},
-          function (r) {
-            KolUi.showToast(
-              r && r.success ? '已采集: ' + (noteData.title || noteData.desc || '').substring(0, 20) + '...' : '保存失败',
-              !r || !r.success, CFG.color
-            );
-          }
-        );
+        savePostData(noteId, noteData.title || noteData.desc, user.nickname, user.userId ? 'https://www.xiaohongshu.com/user/profile/' + user.userId : '', parseCount(interact.likedCount));
         return;
       }
     }
 
+    // 第2层：从 API 拦截数据获取（SPA 导航后有效）
+    try {
+      var apiEl = document.getElementById('__kol_xhs_api_data__');
+      if (apiEl && apiEl.textContent && apiEl.dataset.ready === '1') {
+        var apiData = JSON.parse(apiEl.textContent);
+        var apiNote = apiData.noteDetailMap && apiData.noteDetailMap[noteId] && apiData.noteDetailMap[noteId].note;
+        if (apiNote) {
+          var apiInteract = apiNote.interactInfo || {};
+          var apiUser = apiNote.user || {};
+          savePostData(noteId, apiNote.title || apiNote.desc, apiUser.nickname, apiUser.userId ? 'https://www.xiaohongshu.com/user/profile/' + apiUser.userId : '', parseCount(apiInteract.likedCount));
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // 第3层：从 DOM 元素刮取（最后手段）
+    var domData = collectFromDom(noteId);
+    if (domData) {
+      savePostData(noteId, domData.title, domData.bloggerName, '', domData.likes);
+      return;
+    }
+
+    // 第4层：回退到手动填写表单
     KolUi.showPostForm({
       color: CFG.color, label: '帖子', subLabel: CFG.name,
       autoId: CFG.idPrefix + '_' + noteId,

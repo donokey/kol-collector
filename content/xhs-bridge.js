@@ -111,7 +111,54 @@
   setInterval(function () {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      setTimeout(refreshData, 2000);
+      setTimeout(refreshData, 1000);
     }
-  }, 800);
+  }, 500);
+
+  // ========== API 响应拦截 ==========
+  // SPA 导航后 __INITIAL_STATE__ 不会更新，
+  // 通过拦截 fetch/XHR 捕获帖子 API 响应数据
+
+  var apiEl = document.getElementById('__kol_xhs_api_data__');
+  if (!apiEl) {
+    apiEl = document.createElement('div');
+    apiEl.id = '__kol_xhs_api_data__';
+    apiEl.style.display = 'none';
+    document.documentElement.appendChild(apiEl);
+  }
+
+  function captureApiData(data) {
+    if (data && data.data && data.data.noteDetailMap) {
+      apiEl.textContent = JSON.stringify(data.data);
+      apiEl.dataset.ready = '1';
+    }
+  }
+
+  // 拦截 fetch
+  var _fetch = window.fetch;
+  window.fetch = function () {
+    return _fetch.apply(this, arguments).then(function (response) {
+      var ct = response.headers.get('content-type') || '';
+      if (ct.indexOf('json') >= 0) {
+        response.clone().text().then(function (text) {
+          try { captureApiData(JSON.parse(text)); } catch (e) {}
+        });
+      }
+      return response;
+    });
+  };
+
+  // 拦截 XMLHttpRequest
+  var _xhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.addEventListener('load', function () {
+      if (this.status === 200 && this.responseText) {
+        try {
+          var data = JSON.parse(this.responseText);
+          captureApiData(data);
+        } catch (e) {}
+      }
+    });
+    return _xhrOpen.apply(this, arguments);
+  };
 })();
