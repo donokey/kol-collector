@@ -7,6 +7,12 @@
   "content_scripts": [
     {
       "matches": ["*://*.xiaohongshu.com/*"],
+      "js": ["content/xhs-early-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.xiaohongshu.com/*"],
       "js": ["content/xhs-bridge.js"],
       "run_at": "document_end",
       "world": "MAIN"

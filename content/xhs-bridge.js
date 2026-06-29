@@ -115,58 +115,5 @@
     }
   }, 500);
 
-  // ========== API 响应拦截 ==========
-  // SPA 导航后 __INITIAL_STATE__ 不会更新，
-  // 通过拦截 fetch/XHR 捕获帖子 API 响应数据
-
-  var apiEl = document.getElementById('__kol_xhs_api_data__');
-  if (!apiEl) {
-    apiEl = document.createElement('div');
-    apiEl.id = '__kol_xhs_api_data__';
-    apiEl.style.display = 'none';
-    document.documentElement.appendChild(apiEl);
-  }
-
-  function captureApiData(data) {
-    if (data && data.data && data.data.noteDetailMap) {
-      // 只保留包含当前帖子 ID 的数据，避免 feed API 响应覆盖 detail API 的新鲜数据
-      var pathNoteId = (location.pathname.match(/\/explore\/([^/?]+)/) ||
-                        location.pathname.match(/\/discovery\/item\/([^/?]+)/));
-      var currentId = pathNoteId ? pathNoteId[1] : null;
-      if (currentId && !data.data.noteDetailMap[currentId]) {
-        return; // 这个响应不包含当前帖子的数据，跳过
-      }
-      console.log('[KOL采集-bridge] API数据已捕获, noteIds:', Object.keys(data.data.noteDetailMap));
-      apiEl.textContent = JSON.stringify(data.data);
-      apiEl.dataset.ready = '1';
-    }
-  }
-
-  // 拦截 fetch（不过滤 content-type，捕获所有可能的 JSON 响应）
-  var _fetch = window.fetch;
-  window.fetch = function () {
-    return _fetch.apply(this, arguments).then(function (response) {
-      try {
-        response.clone().text().then(function (text) {
-          if (text.charAt(0) === '{') {
-            try { captureApiData(JSON.parse(text)); } catch (e) {}
-          }
-        });
-      } catch (e) {}
-      return response;
-    });
-  };
-
-  // 拦截 XMLHttpRequest
-  var _xhrOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    this.addEventListener('load', function () {
-      if (this.status === 200 && this.responseText && this.responseText.charAt(0) === '{') {
-        try {
-          captureApiData(JSON.parse(this.responseText));
-        } catch (e) {}
-      }
-    });
-    return _xhrOpen.apply(this, arguments);
-  };
+  // API 拦截已移至 xhs-early-hook.js（document_start 时机，确保在页面 JS 之前安装）
 })();
