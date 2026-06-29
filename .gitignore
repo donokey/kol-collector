@@ -14,5 +14,5 @@ desktop.ini
 *.pem
 node_modules/
 
-# Build output
-dist/
+# Build output (keep dist/ for GitHub download)
+# dist/
