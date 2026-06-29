@@ -1,0 +1,12 @@
+{
+  "name": "kol-collector",
+  "version": "1.7.0",
+  "description": "KOL采集助手 - 小红书/抖音/B站/微博博主与帖子数据采集工具",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.0"
+  },
+  "private": true
+}
