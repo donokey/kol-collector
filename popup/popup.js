@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="item-meta">
           <span>评论: ${formatNumber(p.comments || 0)}</span>
           <span>收藏: ${formatNumber(p.favorites || 0)}</span>
-          <span>转发: ${formatNumber(p.shares || 0)}</span>
+          <span>互动: ${formatNumber((p.likes || 0) + (p.comments || 0) + (p.favorites || 0))}</span>
         </div>
         <div class="item-meta">
           ${followersDisplay}
@@ -387,6 +387,8 @@ document.addEventListener('DOMContentLoaded', () => {
         { header: '博主名称', key: 'name', width: 18 },
         { header: '主页链接', key: 'profileUrl', width: 45 },
         { header: '粉丝数', key: 'followers', width: 12 },
+        { header: '内容方向', key: 'category', width: 18 },
+        { header: '合作状态', key: 'status', width: 14 },
         { header: '备注', key: 'note', width: 22 },
         { header: '采集时间', key: 'collectedAt', width: 20 }
       ];
@@ -396,6 +398,8 @@ document.addEventListener('DOMContentLoaded', () => {
           platform: b.platform,
           name: b.name,
           followers: b.followers,
+          category: '',
+          status: '',
           note: b.note || '',
           collectedAt: new Date(b.collectedAt).toLocaleString('zh-CN')
         });
@@ -406,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      styleSheet(ws1, 6);
+      styleSheet(ws1, 8);
 
       // 粉丝数列居中 + 数字格式
       for (let r = 2; r <= ws1.rowCount; r++) {
@@ -426,17 +430,17 @@ document.addEventListener('DOMContentLoaded', () => {
         { header: '帖子标题', key: 'title', width: 35 },
         { header: '帖子链接', key: 'postUrl', width: 45 },
         { header: '博主名称', key: 'bloggerName', width: 16 },
-        { header: '博主主页', key: 'bloggerProfileUrl', width: 45 },
         { header: '博主粉丝', key: 'bloggerFollowers', width: 12 },
         { header: '点赞', key: 'likes', width: 10 },
         { header: '评论', key: 'comments', width: 10 },
         { header: '收藏', key: 'favorites', width: 10 },
-        { header: '转发', key: 'shares', width: 10 },
+        { header: '互动总量', key: 'engagement', width: 12 },
         { header: '备注', key: 'note', width: 22 },
         { header: '采集时间', key: 'collectedAt', width: 20 }
       ];
 
       allData.posts.forEach(p => {
+        const engagement = (p.likes || 0) + (p.comments || 0) + (p.favorites || 0);
         const row = ws2.addRow({
           platform: p.platform,
           title: p.title,
@@ -445,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
           likes: p.likes || 0,
           comments: p.comments || 0,
           favorites: p.favorites || 0,
-          shares: p.shares || 0,
+          engagement: engagement,
           note: p.note || '',
           collectedAt: new Date(p.collectedAt).toLocaleString('zh-CN')
         });
@@ -454,17 +458,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (p.postUrl) {
           postUrlCell.value = { text: p.postUrl, hyperlink: p.postUrl };
         }
-        // 博主主页链接设为可点击蓝链
-        const bloggerUrlCell = row.getCell(5);
-        if (p.bloggerProfileUrl) {
-          bloggerUrlCell.value = { text: p.bloggerProfileUrl, hyperlink: p.bloggerProfileUrl };
-        }
       });
 
-      styleSheet(ws2, 12);
+      styleSheet(ws2, 11);
 
       // 数字列居中 + 千分位格式
-      const numCols = [6, 7, 8, 9, 10]; // 博主粉丝、点赞、评论、收藏、转发
+      const numCols = [5, 6, 7, 8, 9]; // 博主粉丝、点赞、评论、收藏、互动总量
       for (let r = 2; r <= ws2.rowCount; r++) {
         const row = ws2.getRow(r);
         row.getCell(1).alignment = centerAlign; // 平台居中

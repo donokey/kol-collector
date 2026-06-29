@@ -21,22 +21,65 @@
 
   function getPageType() {
     var path = window.location.pathname;
+    var params = new URLSearchParams(window.location.search);
     if (/^\/user\/[^/]+/.test(path)) return 'profile';
     if (/^\/video\/\d+/.test(path) || /^\/note\/\d+/.test(path)) return 'post';
+    if (params.has('modal_id')) return 'post';
+    if (/\/search\//.test(path)) return 'post';
+    if (document.querySelector('[data-e2e="feed-video"]')) return 'post';
     return 'other';
   }
 
   function extractIdFromUrl(type) {
     var path = window.location.pathname;
+    var params = new URLSearchParams(window.location.search);
     if (type === 'profile') {
       var m = path.match(/\/user\/([^/?]+)/);
       return m ? m[1] : null;
     }
     if (type === 'post') {
+      if (params.has('modal_id')) return params.get('modal_id');
       var m = path.match(/\/video\/(\d+)/) || path.match(/\/note\/(\d+)/);
       return m ? m[1] : null;
     }
     return null;
+  }
+
+  function parseCountText(text) {
+    if (!text) return 0;
+    text = text.trim();
+    if (text.includes('万')) return Math.round(parseFloat(text) * 10000);
+    var n = parseInt(text.replace(/,/g, ''), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // 尝试从 DOM 读取博主粉丝数（主页统计栏）
+  function readFollowersFromDOM() {
+    // 方法1：查找包含"粉丝"文字的 span/div
+    var allSpans = document.querySelectorAll('span, div, p');
+    for (var i = 0; i < allSpans.length; i++) {
+      var el = allSpans[i];
+      var text = el.textContent.trim();
+      // 匹配 "123.4万粉丝" 或 "粉丝 123.4万" 模式
+      if (/^\d[\d,.]*万?\s*粉丝/.test(text) || /^粉丝\s*[\d]/.test(text)) {
+        var numText = text.replace(/粉丝/g, '').trim();
+        var count = parseCountText(numText);
+        if (count > 0) return count;
+      }
+    }
+    // 方法2：查找 data-e2e 属性
+    var statsEl = document.querySelector('[data-e2e="user-info"]');
+    if (statsEl) {
+      var statItems = statsEl.querySelectorAll('[data-e2e]');
+      for (var j = 0; j < statItems.length; j++) {
+        var attr = statItems[j].getAttribute('data-e2e') || '';
+        if (attr.indexOf('fans') >= 0 || attr.indexOf('follower') >= 0) {
+          var count = parseCountText(statItems[j].textContent);
+          if (count > 0) return count;
+        }
+      }
+    }
+    return 0;
   }
 
   // ========== 数据采集 ==========
@@ -72,10 +115,12 @@
         }
       );
     } else {
+      var domFollowers = readFollowersFromDOM();
       KolUi.showBloggerForm({
         color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
         autoId: CFG.idPrefix + '_' + secUid,
         prefillUrl: 'https://www.douyin.com/user/' + secUid,
+        prefillFollowers: domFollowers > 0 ? domFollowers : '',
         onSave: makeBloggerSave()
       });
     }
