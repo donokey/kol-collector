@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const followersHint = document.getElementById('followers-modal-hint');
   let editingFollowersId = null;
   let editingFollowersType = null; // 'blogger' or 'post'
+  const contactModal = document.getElementById('contact-modal');
+  const contactInput = document.getElementById('contact-input');
+  const contactHint = document.getElementById('contact-modal-hint');
+  let editingContactId = null;
 
   // ========== 初始化 ==========
   loadData();
@@ -67,6 +71,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === followersModal) closeFollowersModal();
   });
 
+  // 联系方式弹窗
+  document.getElementById('contact-modal-close').addEventListener('click', closeContactModal);
+  document.getElementById('contact-modal-save').addEventListener('click', saveContact);
+  contactModal.addEventListener('click', (e) => {
+    if (e.target === contactModal) closeContactModal();
+  });
+
   // ========== 数据加载 ==========
   function loadData() {
     chrome.runtime.sendMessage({ action: 'getAllData' }, (response) => {
@@ -114,6 +125,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `粉丝: ${formatNumber(b.followers)}`
         : `<span class="followers-unknown" data-action="edit-blogger-followers" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" title="点击补填">粉丝数未知</span>`;
 
+      const contactDisplay = b.contact
+        ? `<div class="item-note has-content" style="font-size:11px;color:#007AFF">📱 ${escapeHtml(b.contact)}</div>`
+        : '';
+
       return `
       <div class="item-card" data-id="${escapeHtml(b.id)}" data-type="blogger">
         <div class="item-header">
@@ -124,8 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
           ${followersDisplay}
           <span>${formatTime(b.collectedAt)}</span>
         </div>
+        ${contactDisplay}
         ${b.note ? `<div class="item-note has-content">${escapeHtml(b.note)}</div>` : ''}
         <div class="item-actions">
+          <button class="btn-edit" data-action="edit-contact" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-contact="${escapeHtml(b.contact || '')}">联系方式</button>
           <button class="btn-edit" data-action="edit" data-id="${escapeHtml(b.id)}" data-type="blogger" data-note="${escapeHtml(b.note || '')}">编辑备注</button>
           <button class="btn-open" data-action="open" data-url="${escapeHtml(b.profileUrl)}">打开主页</button>
           <button class="btn-delete" data-action="delete" data-id="${escapeHtml(b.id)}" data-type="blogger">删除</button>
@@ -189,6 +206,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const followersEl = e.target.closest('[data-action="edit-followers"]');
     if (followersEl) {
       openFollowersModal(followersEl.dataset.id, followersEl.dataset.name, 'post');
+      return;
+    }
+
+    // 处理联系方式点击
+    const contactEl = e.target.closest('[data-action="edit-contact"]');
+    if (contactEl) {
+      openContactModal(contactEl.dataset.id, contactEl.dataset.name, contactEl.dataset.contact || '');
       return;
     }
 
@@ -301,6 +325,36 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
+  // ========== 联系方式编辑 ==========
+  function openContactModal(itemId, name, currentContact) {
+    editingContactId = itemId;
+    contactHint.textContent = '博主: ' + (name || '未知');
+    contactInput.value = currentContact || '';
+    contactModal.classList.add('active');
+    setTimeout(() => contactInput.focus(), 100);
+  }
+
+  function closeContactModal() {
+    contactModal.classList.remove('active');
+    editingContactId = null;
+  }
+
+  function saveContact() {
+    if (!editingContactId) return;
+    const contact = contactInput.value.trim();
+    chrome.runtime.sendMessage(
+      { action: 'updateContact', id: editingContactId, contact },
+      (response) => {
+        if (response?.success) {
+          const item = allData.bloggers.find(b => b.id === editingContactId);
+          if (item) item.contact = contact;
+          render();
+          closeContactModal();
+        }
+      }
+    );
+  }
+
   // ========== 删除 ==========
   function deleteItem(type, id) {
     if (!confirm('确定删除这条记录？')) return;
@@ -381,6 +435,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========== 导出 Excel (ExcelJS) ==========
   async function exportXlsx() {
     const date = new Date().toISOString().slice(0, 10);
+    const prefixEl = document.getElementById('export-prefix');
+    const prefix = prefixEl ? prefixEl.value.trim() : '';
+    const prefixStr = prefix ? prefix + '_' : '';
 
     if (currentTab === 'bloggers') {
       // 导出博主表
@@ -399,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { header: '博主名称', key: 'name', width: 18 },
         { header: '主页链接', key: 'profileUrl', width: 45 },
         { header: '粉丝数', key: 'followers', width: 12 },
+        { header: '联系方式', key: 'contact', width: 20 },
         { header: '备注', key: 'note', width: 22 },
         { header: '采集时间', key: 'collectedAt', width: 20 }
       ];
@@ -408,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
           platform: b.platform,
           name: b.name,
           followers: b.followers || 0,
+          contact: b.contact || '',
           note: b.note || '',
           collectedAt: new Date(b.collectedAt).toLocaleString('zh-CN')
         });
@@ -417,7 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      styleSheet(ws, 6);
+      styleSheet(ws, 7);
       for (let r = 2; r <= ws.rowCount; r++) {
         ws.getRow(r).getCell(4).alignment = centerAlign;
         ws.getRow(r).getCell(4).numFmt = '#,##0';
@@ -425,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const buffer = await wb.xlsx.writeBuffer();
-      downloadBlob(buffer, `KOL博主库_${date}.xlsx`);
+      downloadBlob(buffer, `${prefixStr}KOL博主库_${date}.xlsx`);
 
     } else {
       // 导出帖子表
@@ -485,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const buffer = await wb.xlsx.writeBuffer();
-      downloadBlob(buffer, `KOL帖子收藏_${date}.xlsx`);
+      downloadBlob(buffer, `${prefixStr}KOL帖子收藏_${date}.xlsx`);
     }
   }
 
@@ -574,12 +633,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const prefixEl = document.getElementById('export-prefix');
+    const prefix = prefixEl ? prefixEl.value.trim() : '';
+    const prefixStr = prefix ? prefix + '_' : '';
+
     const data = JSON.stringify(allData, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `KOL采集_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `${prefixStr}KOL采集_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }

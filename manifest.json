@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "KOL 采集助手",
   "description": "一键采集小红书/抖音/B站/微博博主和帖子数据，支持 Excel/JSON 导出",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["*://*.weibo.cn/*"],
   "content_scripts": [

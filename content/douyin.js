@@ -84,6 +84,24 @@
 
   // ========== 数据采集 ==========
 
+  // 尝试从 DOM 读取博主简介/签名
+  function readBioFromDOM() {
+    var selectors = [
+      '[data-e2e="user-info"] [data-e2e="user-desc"]',
+      '[class*="user-desc"]',
+      '[class*="signature"]',
+      '[class*="bio"]'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el) {
+        var text = (el.textContent || '').trim();
+        if (text) return text;
+      }
+    }
+    return '';
+  }
+
   function collectBlogger() {
     var secUid = extractIdFromUrl('profile');
     if (!secUid) {
@@ -96,34 +114,34 @@
 
     var renderData = getRenderData();
     var loggedInUser = renderData && renderData.app && renderData.app.user && renderData.app.user.info;
+    var bio = '';
+    var nickname = '';
+    var followers = 0;
 
     if (loggedInUser && loggedInUser.nickname &&
         (loggedInUser.secUid === secUid || loggedInUser.sec_uid === secUid || loggedInUser.uid === secUid)) {
-      var followers = parseInt(loggedInUser.follower_count || loggedInUser.followerCount || loggedInUser.fans || 0, 10);
-      chrome.runtime.sendMessage(
-        { action: 'saveBlogger', data: {
-          id: CFG.idPrefix + '_' + secUid,
-          platform: CFG.name,
-          name: loggedInUser.nickname,
-          profileUrl: 'https://www.douyin.com/user/' + secUid,
-          followers: followers,
-          note: '',
-          collectedAt: new Date().toISOString()
-        }},
-        function (r) {
-          KolUi.showToast(r && r.success ? '已采集博主: ' + loggedInUser.nickname : '保存失败', !r || !r.success, CFG.color);
-        }
-      );
+      nickname = loggedInUser.nickname;
+      followers = parseInt(loggedInUser.follower_count || loggedInUser.followerCount || loggedInUser.fans || 0, 10);
+      bio = loggedInUser.signature || loggedInUser.desc || '';
     } else {
       var domFollowers = readFollowersFromDOM();
-      KolUi.showBloggerForm({
-        color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
-        autoId: CFG.idPrefix + '_' + secUid,
-        prefillUrl: 'https://www.douyin.com/user/' + secUid,
-        prefillFollowers: domFollowers > 0 ? domFollowers : '',
-        onSave: makeBloggerSave()
-      });
+      followers = domFollowers;
+      // 尝试从 DOM 获取名称和简介
+      var nameEl = document.querySelector('[data-e2e="user-info"] [data-e2e="user-name"]') || document.querySelector('[class*="nickname"]') || document.querySelector('h1');
+      if (nameEl) nickname = (nameEl.textContent || '').trim();
     }
+
+    if (!bio) bio = readBioFromDOM();
+
+    KolUi.showBloggerForm({
+      color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
+      autoId: CFG.idPrefix + '_' + secUid,
+      prefillUrl: 'https://www.douyin.com/user/' + secUid,
+      prefillName: nickname,
+      prefillFollowers: followers > 0 ? followers : '',
+      prefillBio: bio,
+      onSave: makeBloggerSave()
+    });
   }
 
   function makeBloggerSave() {
@@ -132,6 +150,7 @@
         { action: 'saveBlogger', data: {
           id: data.id, platform: CFG.name, name: data.name,
           profileUrl: data.profileUrl, followers: data.followers,
+          contact: data.contact || '',
           note: '', collectedAt: new Date().toISOString()
         }},
         function (r) {

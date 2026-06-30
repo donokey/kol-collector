@@ -39,6 +39,9 @@
 
     <!-- 操作栏 -->
     <footer class="actions">
+      <div style="width:100%;margin-bottom:6px">
+        <input id="export-prefix" type="text" placeholder="文件名前缀（可选，如：美妆投放）" style="width:100%;padding:5px 8px;border:0.5px solid #D2D2D7;border-radius:6px;font-size:11px;box-sizing:border-box;outline:none;color:#1D1D1F;background:#FAFAFA">
+      </div>
       <button class="btn btn-primary" id="btn-export-xlsx">导出 Excel</button>
       <button class="btn btn-secondary" id="btn-export-json">导出 JSON</button>
       <button class="btn btn-secondary" id="btn-import-json">导入 JSON</button>
@@ -69,6 +72,19 @@
       <div class="modal-hint" id="followers-modal-hint"></div>
       <input id="followers-input" type="text" placeholder="输入粉丝数，如 12000 或 1.2万">
       <button class="btn btn-primary modal-save" id="followers-modal-save">保存</button>
+    </div>
+  </div>
+
+  <!-- 联系方式编辑弹窗 -->
+  <div class="modal-overlay" id="contact-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span>编辑联系方式</span>
+        <button class="modal-close" id="contact-modal-close">&times;</button>
+      </div>
+      <div class="modal-hint" id="contact-modal-hint"></div>
+      <input id="contact-input" type="text" placeholder="微信号 / 手机号 / 商务合作方式...">
+      <button class="btn btn-primary modal-save" id="contact-modal-save">保存</button>
     </div>
   </div>
 

@@ -179,35 +179,49 @@
 
     var stateFollowers = 0;
     var nickname = '未知';
+    var bio = '';
     if (state) {
       var userData = state.user && state.user.userPageData;
       if (userData) {
         var info = userData.basicInfo || {};
         nickname = info.nickname || '未知';
         stateFollowers = parseCount(info.fans);
+        bio = info.desc || '';
       }
     }
 
-    // 尝试从 DOM 补充粉丝数
+    // 尝试从 DOM 补充粉丝数和简介
     var domFollowers = readBloggersFollowersFromDOM();
     var followers = stateFollowers || domFollowers;
+    if (!bio) {
+      var descEl = document.querySelector('[class*="user-desc"]') || document.querySelector('[class*="desc"]') || document.querySelector('.user-info .desc');
+      if (descEl) bio = (descEl.textContent || '').trim();
+    }
 
     if (nickname !== '未知' && followers > 0) {
-      // 有名字有粉丝数，直接保存
-      chrome.runtime.sendMessage(
-        { action: 'saveBlogger', data: {
-          id: CFG.idPrefix + '_' + userId,
-          platform: CFG.name,
-          name: nickname,
-          profileUrl: 'https://www.xiaohongshu.com/user/profile/' + userId,
-          followers: followers,
-          note: '',
-          collectedAt: new Date().toISOString()
-        }},
-        function (r) {
-          KolUi.showToast(r && r.success ? '已采集博主: ' + nickname : '保存失败', !r || !r.success, CFG.color);
+      // 有名字有粉丝数，弹表单让用户确认并可填联系方式
+      KolUi.showBloggerForm({
+        color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
+        autoId: CFG.idPrefix + '_' + userId,
+        prefillUrl: 'https://www.xiaohongshu.com/user/profile/' + userId,
+        prefillName: nickname,
+        prefillFollowers: followers,
+        prefillBio: bio,
+        onSave: function (overlay, data) {
+          chrome.runtime.sendMessage(
+            { action: 'saveBlogger', data: {
+              id: data.id, platform: CFG.name, name: data.name,
+              profileUrl: data.profileUrl, followers: data.followers,
+              contact: data.contact || '',
+              note: '', collectedAt: new Date().toISOString()
+            }},
+            function (r) {
+              overlay.remove();
+              KolUi.showToast(r && r.success ? '已采集博主: ' + data.name : '保存失败', !r || !r.success, CFG.color);
+            }
+          );
         }
-      );
+      });
       return;
     }
 
@@ -218,11 +232,13 @@
       prefillUrl: 'https://www.xiaohongshu.com/user/profile/' + userId,
       prefillName: nickname !== '未知' ? nickname : '',
       prefillFollowers: followers > 0 ? followers : '',
+      prefillBio: bio,
       onSave: function (overlay, data) {
         chrome.runtime.sendMessage(
           { action: 'saveBlogger', data: {
             id: data.id, platform: CFG.name, name: data.name,
             profileUrl: data.profileUrl, followers: data.followers,
+            contact: data.contact || '',
             note: '', collectedAt: new Date().toISOString()
           }},
           function (r) {

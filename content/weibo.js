@@ -120,18 +120,16 @@
       .then(function (data) {
         if (data.ok === 1 && data.data && data.data.userInfo) {
           var info = data.data.userInfo;
-          chrome.runtime.sendMessage(
-            { action: 'saveBlogger', data: {
-              id: CFG.idPrefix + '_' + uid,
-              platform: CFG.name, name: info.screen_name || '未知',
-              profileUrl: 'https://weibo.com/u/' + uid,
-              followers: info.followers_count || 0,
-              note: '', collectedAt: new Date().toISOString()
-            }},
-            function (r) {
-              KolUi.showToast(r && r.success ? '已采集博主: ' + info.screen_name : '保存失败', !r || !r.success, CFG.color);
-            }
-          );
+          var bio = info.description || '';
+          KolUi.showBloggerForm({
+            color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
+            autoId: CFG.idPrefix + '_' + uid,
+            prefillUrl: 'https://weibo.com/u/' + uid,
+            prefillName: info.screen_name || '',
+            prefillFollowers: info.followers_count || '',
+            prefillBio: bio,
+            onSave: makeBloggerSave()
+          });
         } else {
           KolUi.showBloggerForm({
             color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
@@ -157,6 +155,7 @@
         { action: 'saveBlogger', data: {
           id: data.id, platform: CFG.name, name: data.name,
           profileUrl: data.profileUrl, followers: data.followers,
+          contact: data.contact || '',
           note: '', collectedAt: new Date().toISOString()
         }},
         function (r) {

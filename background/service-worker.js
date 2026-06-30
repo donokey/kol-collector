@@ -49,6 +49,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       updateBloggerFollowers(message.id, message.followers).then(sendResponse);
       return true;
 
+    case 'updateContact':
+      updateContact(message.id, message.contact).then(sendResponse);
+      return true;
+
     case 'deleteItem':
       deleteItem(message.type, message.id).then(sendResponse);
       return true;
@@ -82,8 +86,9 @@ async function saveBlogger(data) {
       // 去重：以 id 为 key，已存在则更新
       const existingIndex = bloggers.findIndex(b => b.id === data.id);
       if (existingIndex >= 0) {
-        // 保留原有备注，更新其他字段
-        bloggers[existingIndex] = { ...data, note: bloggers[existingIndex].note };
+        // 保留原有备注和联系方式，更新其他字段
+        const existing = bloggers[existingIndex];
+        bloggers[existingIndex] = { ...data, note: existing.note, contact: existing.contact || data.contact || '' };
       } else {
         bloggers.push(data);
       }
@@ -173,6 +178,22 @@ async function updateBloggerFollowers(id, followers) {
     const index = bloggers.findIndex(b => b.id === id);
     if (index >= 0) {
       bloggers[index].followers = followers;
+      await chrome.storage.local.set({ bloggers });
+      return { success: true };
+    }
+    return { success: false, error: '未找到该博主' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function updateContact(id, contact) {
+  try {
+    const result = await chrome.storage.local.get('bloggers');
+    const bloggers = result.bloggers || [];
+    const index = bloggers.findIndex(b => b.id === id);
+    if (index >= 0) {
+      bloggers[index].contact = contact;
       await chrome.storage.local.set({ bloggers });
       return { success: true };
     }

@@ -56,6 +56,19 @@
 
   // ========== 数据采集 ==========
 
+  // 从 DOM 读取博主简介/签名
+  function readBioFromDOM() {
+    var selectors = ['.h-sign', '[class*="sign"]', '[class*="bio"]'];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el) {
+        var text = (el.textContent || '').trim();
+        if (text) return text;
+      }
+    }
+    return '';
+  }
+
   function collectBlogger() {
     var mid = extractIdFromUrl('profile');
     if (!mid) {
@@ -68,63 +81,39 @@
 
     fetchJson('https://api.bilibili.com/x/relation/stat?vmid=' + mid)
       .then(function (data) {
-        if (data.code !== 0 || !data.data) {
-          KolUi.showBloggerForm({
-            color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
-            autoId: CFG.idPrefix + '_' + mid,
-            prefillUrl: 'https://space.bilibili.com/' + mid,
-            onSave: makeBloggerSave()
-          });
-          return;
-        }
+        var follower = (data.code === 0 && data.data) ? (data.data.follower || 0) : 0;
 
-        var follower = data.data.follower || 0;
         // 从页面 title 或 DOM 获取博主名称
         var title = document.title || '';
         var nameMatch = title.match(/个人空间-(.+?)的个人空间/) || title.match(/^(.+?)的个人空间/);
         var name = nameMatch ? nameMatch[1] : '';
-
         if (!name) {
           var nameEl = document.querySelector('#h-name') || document.querySelector('.h-name') || document.querySelector('[class*="nickname"]');
           name = nameEl ? nameEl.textContent.trim() : '';
         }
 
-        if (name) {
-          saveBlogger(mid, name, follower);
-        } else {
-          KolUi.showBloggerForm({
-            color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
-            autoId: CFG.idPrefix + '_' + mid,
-            prefillFollowers: follower,
-            prefillUrl: 'https://space.bilibili.com/' + mid,
-            onSave: makeBloggerSave()
-          });
-        }
-      })
-      .catch(function () {
+        var bio = readBioFromDOM();
+
         KolUi.showBloggerForm({
           color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
           autoId: CFG.idPrefix + '_' + mid,
           prefillUrl: 'https://space.bilibili.com/' + mid,
+          prefillName: name,
+          prefillFollowers: follower > 0 ? follower : '',
+          prefillBio: bio,
+          onSave: makeBloggerSave()
+        });
+      })
+      .catch(function () {
+        var bio = readBioFromDOM();
+        KolUi.showBloggerForm({
+          color: CFG.color, label: CFG.name, idPrefix: CFG.idPrefix,
+          autoId: CFG.idPrefix + '_' + mid,
+          prefillUrl: 'https://space.bilibili.com/' + mid,
+          prefillBio: bio,
           onSave: makeBloggerSave()
         });
       });
-  }
-
-  function saveBlogger(mid, name, followers) {
-    chrome.runtime.sendMessage(
-      { action: 'saveBlogger', data: {
-        id: CFG.idPrefix + '_' + mid,
-        platform: CFG.name, name: name,
-        profileUrl: 'https://space.bilibili.com/' + mid,
-        followers: followers, note: '',
-        collectedAt: new Date().toISOString()
-      }},
-      function (r) {
-        var msg = r && r.success ? '已采集博主: ' + name + ' (粉丝: ' + formatFollowers(followers) + ')' : '保存失败';
-        KolUi.showToast(msg, !r || !r.success, CFG.color);
-      }
-    );
   }
 
   function makeBloggerSave() {
@@ -133,6 +122,7 @@
         { action: 'saveBlogger', data: {
           id: data.id, platform: CFG.name, name: data.name,
           profileUrl: data.profileUrl, followers: data.followers,
+          contact: data.contact || '',
           note: '', collectedAt: new Date().toISOString()
         }},
         function (r) {
